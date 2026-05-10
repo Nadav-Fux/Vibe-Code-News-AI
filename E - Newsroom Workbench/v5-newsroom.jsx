@@ -137,7 +137,7 @@ const V5_NAV_ITEMS = [
   { key:'home', label:'בית', href:V5_LINKS.home },
   { key:'news', label:'חדשות', href:V5_LINKS.news },
   { key:'articles', label:'מאמרים', href:V5_LINKS.articles },
-  { key:'article', label:'מדריכים', href:V5_LINKS.article },
+  { key:'article', label:'מאמר חדש', href:V5_LINKS.article },
   { key:'tools', label:'כלים', href:V5_LINKS.tools },
   { key:'community', label:'קהילה', href:V5_LINKS.community },
 ];
@@ -307,6 +307,10 @@ function V5Title() {
       <div className="v5-title-sub">
         <span>הבינה המלאכותית, הטכנולוגיה ועולם </span>
         <span className="v5-rotor-wrap"><V5RotatingWord/></span>
+      </div>
+      <div className="v5-title-actions">
+        <a className="v5-title-action primary" href={V5_LINKS.article}>פתח מאמר חדש ↗</a>
+        <a className="v5-title-action ghost" href={V5_LINKS.articles}>לספריית המאמרים</a>
       </div>
     </div>
   );
@@ -591,6 +595,10 @@ function V5CategoryPage() {
             <em>{f === 'הכל' ? V5_ARTICLES.length : V5_ARTICLES.filter(a => V5ArticleKind(a) === f).length}</em>
           </button>
         ))}
+        <a className="v5-cat-filter v5-cat-filter-cta" href={V5_LINKS.article}>
+          <span>מאמר חדש</span>
+          <em>open</em>
+        </a>
       </div>
 
       <div className="v5-cat-layout">
@@ -623,6 +631,11 @@ function V5CategoryPage() {
 
         <aside className="v5-cat-side" data-v5-reveal style={{'--ex':'-24px'}}>
           <h3><span className="serif">מסלולי</span> קריאה</h3>
+          <a className="v5-path v5-path-sage v5-path-hero" href={V5_LINKS.article}>
+            <span className="mono">FEATURED · NEW</span>
+            <strong>לפתוח מאמר חדש</strong>
+            <em>העמוד הייעודי שמדגים איך נראה מאמר אמיתי באופציה E.</em>
+          </a>
           {V5_PATHS.map((path, i) => (
             <a key={path.label} href={V5_LINKS.article} className={`v5-path v5-path-${path.tone}`} style={{'--rot': `${i % 2 ? -1.6 : 1.4}deg`}}>
               <span className="mono">TRACK {String(i+1).padStart(2,'0')} · {path.count}</span>
@@ -672,6 +685,10 @@ function V5ArticleTemplate() {
         <p>
           הטמפלט הזה בנוי למאמר ארוך, מדריך פרקטי או השוואת מודלים. הוא שומר על השפה של E:
           נייר, שולחן מערכת, הערות בצד, אבל נותן חוויית קריאה נקייה מספיק כדי לא לעייף.
+          <span className="v5-article-links">
+            <a href={V5_LINKS.articles}>חזרה לספריית המאמרים</a>
+            <a href={V5_LINKS.article}>פתח מאמר חדש</a>
+          </span>
         </p>
       </div>
 
@@ -930,6 +947,14 @@ function V5ArticlesPage() {
     <>
       <V5Ticker/>
       <V5CategoryPage/>
+      <section className="v5-article-gateway">
+        <div className="v5-article-gateway-inner" data-v5-reveal>
+          <div className="v5-eyebrow">[ OPEN A NEW ARTICLE ]</div>
+          <h2>רוצה לראות איך מאמר נראה? <span className="serif">זה השער.</span></h2>
+          <p>לחיצה אחת פותחת את עמוד המאמר הייעודי, עם כל האלמנטים שכדאי לבחון לפני שמייצרים תוכן אמיתי.</p>
+          <a className="v5-title-action primary" href={V5_LINKS.article}>פתח מאמר חדש ↗</a>
+        </div>
+      </section>
       <V5Canvas/>
       <V5Cta/>
     </>
