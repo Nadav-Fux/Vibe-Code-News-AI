@@ -94,6 +94,36 @@ const V5_HOT = [
   { rank:6, title:'איך להפסיק לפחד מ-MCP',             cat:'GUIDE',    score:3.8,  delta:'▲ 2',  dir:'up',  spark:[1,2,2,3,4,5,5,7,8,8,10,12], tool:'48H' },
 ];
 
+const V5_KIND_MAP = {
+  GUIDE: 'מדריך',
+  BENCH: 'השוואה',
+  OPINION: 'מאמר',
+  'DEEP DIVE': 'מאמר עומק',
+  TOOLS: 'סקירה',
+};
+
+const V5_CATEGORY_FILTERS = ['הכל', 'מדריך', 'מאמר', 'השוואה', 'סקירה'];
+
+const V5_PATHS = [
+  { label:'למתחילים', count:'18', title:'מ־prompt ראשון לסוכן ראשון', tone:'sage' },
+  { label:'למפתחים', count:'31', title:'Cursor, MCP, agents, deploy', tone:'sky' },
+  { label:'למנהלים', count:'12', title:'מה שווה כלי AI לצוות מוצר', tone:'paper' },
+  { label:'לחולי בנצ׳מרקים', count:'09', title:'מודלים, מחירים, latency', tone:'lavender' },
+];
+
+const V5_ARTICLE_OUTLINE = [
+  'מה השתנה בפיתוח עם AI',
+  'הסטאק המינימלי לסוכן עובד',
+  'איפה מודלים נופלים בפרודקשן',
+  'צ׳קליסט לפני שמשחררים',
+];
+
+const V5_RELATED = [
+  { title:'הפרוטוקול הקטן שמסדר MCP', meta:'מדריך · 9 דק׳' },
+  { title:'מה למדנו מ־47 משימות Claude', meta:'מאמר עומק · 12 דק׳' },
+  { title:'האם Linear AI באמת מנהל מוצר?', meta:'סקירה · 6 דק׳' },
+];
+
 // ===== Drag hook =====
 function useV5Drag() {
   const ref = useV5R(null);
@@ -509,12 +539,236 @@ function V5ArticlePostit({ a, pos, visible }) {
   );
 }
 
+// ============== CATEGORY PAGE — magazine library template ==============
+function V5ArticleKind(a) {
+  return V5_KIND_MAP[a.cat] || 'מאמר';
+}
+
+function V5CategoryPage() {
+  const [filter, setFilter] = useV5S('הכל');
+  const visible = filter === 'הכל' ? V5_ARTICLES : V5_ARTICLES.filter(a => V5ArticleKind(a) === filter);
+  const hero = visible[0] || V5_ARTICLES[0];
+
+  return (
+    <section className="v5-category">
+      <div className="v5-cat-bg-word">LIBRARY</div>
+      <div className="v5-cat-head" data-v5-reveal>
+        <div>
+          <div className="v5-eyebrow">[ §04 — ARTICLE LIBRARY ]</div>
+          <h2>דף קטגוריה <span className="serif">למאמרים שחיים על הקיר.</span></h2>
+        </div>
+        <p>
+          מדריכים, מאמרים, השוואות וסקירות. במקום עוד גריד משעמם, הספרייה עובדת כמו שולחן מערכת:
+          פתקים, מסלולי קריאה, דירוגים קטנים, וקצת בלגן שמכריח את העין לטייל.
+        </p>
+      </div>
+
+      <div className="v5-cat-controls" data-v5-reveal>
+        {V5_CATEGORY_FILTERS.map(f => (
+          <button key={f} className={`v5-cat-filter ${filter===f?'active':''}`} onClick={() => setFilter(f)}>
+            <span>{f}</span>
+            <em>{f === 'הכל' ? V5_ARTICLES.length : V5_ARTICLES.filter(a => V5ArticleKind(a) === f).length}</em>
+          </button>
+        ))}
+      </div>
+
+      <div className="v5-cat-layout">
+        <article className={`v5-cat-feature v5-pn-${hero.color}`} data-v5-reveal style={{'--ey':'42px'}}>
+          <span className="v5-cat-stamp">EDITOR PICK</span>
+          <div className="v5-cat-feature-art">
+            <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice">
+              <rect width="640" height="360" fill="currentColor" opacity="0.08"/>
+              <g fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M70 250 C140 120 220 280 310 150 S500 90 570 240" strokeDasharray="8 10"/>
+                <path d="M80 110 L230 70 L340 170 L500 105" />
+                <rect x="74" y="74" width="120" height="82" rx="10"/>
+                <rect x="370" y="190" width="150" height="96" rx="12"/>
+                <circle cx="275" cy="210" r="54"/>
+              </g>
+              <text x="42" y="318" fontFamily="Instrument Serif" fontStyle="italic" fontSize="62" fill="currentColor">vibe field notes.</text>
+            </svg>
+          </div>
+          <div className="v5-cat-feature-copy">
+            <div className="v5-cardline">
+              <span>{V5ArticleKind(hero)}</span>
+              <span>{hero.read}</span>
+              <span>{hero.author}</span>
+            </div>
+            <h3>{hero.title}</h3>
+            <p>{hero.body}</p>
+            <a>פתח טמפלט מאמר ↙</a>
+          </div>
+        </article>
+
+        <aside className="v5-cat-side" data-v5-reveal style={{'--ex':'-24px'}}>
+          <h3><span className="serif">מסלולי</span> קריאה</h3>
+          {V5_PATHS.map((path, i) => (
+            <a key={path.label} className={`v5-path v5-path-${path.tone}`} style={{'--rot': `${i % 2 ? -1.6 : 1.4}deg`}}>
+              <span className="mono">TRACK {String(i+1).padStart(2,'0')} · {path.count}</span>
+              <strong>{path.label}</strong>
+              <em>{path.title}</em>
+            </a>
+          ))}
+        </aside>
+
+        <div className="v5-cat-grid">
+          {visible.map((a, i) => (
+            <article key={a.id} className={`v5-cat-card v5-cat-card-${a.color}`} data-v5-reveal style={{'--delay': `${i * 0.04}s`}}>
+              <div className="v5-cardline">
+                <span>{V5ArticleKind(a)}</span>
+                <span>{a.cat}</span>
+              </div>
+              <h3>{a.title}</h3>
+              <p>{a.body}</p>
+              <div className="v5-cat-card-foot">
+                <span className="mono">{a.author}</span>
+                <span className="mono">{a.read}</span>
+                <a>↙</a>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============== ARTICLE TEMPLATE — longform page mock ==============
+function V5ArticleTemplate() {
+  return (
+    <section className="v5-article-template">
+      <div className="v5-article-paper"></div>
+      <div className="v5-article-top" data-v5-reveal>
+        <div className="v5-article-labels">
+          <span>§05 — ARTICLE TEMPLATE</span>
+          <span>מדריך / מאמר / השוואה</span>
+          <span>RTL READY</span>
+        </div>
+        <h2>
+          בונים סוכן AI ב־Cursor:
+          <span className="serif"> מהפתק הראשון לפרודקשן.</span>
+        </h2>
+        <p>
+          הטמפלט הזה בנוי למאמר ארוך, מדריך פרקטי או השוואת מודלים. הוא שומר על השפה של E:
+          נייר, שולחן מערכת, הערות בצד, אבל נותן חוויית קריאה נקייה מספיק כדי לא לעייף.
+        </p>
+      </div>
+
+      <div className="v5-article-shell">
+        <aside className="v5-article-rail" data-v5-reveal style={{'--ex':'26px'}}>
+          <div className="v5-rail-card">
+            <strong>TL;DR</strong>
+            <p>Cursor + MCP + מודל טוב הם לא מוצר. צריך גבולות, בדיקות, לוגים ו־rollback.</p>
+          </div>
+          <div className="v5-rail-card v5-rail-dark">
+            <span className="mono">READING MAP</span>
+            {V5_ARTICLE_OUTLINE.map((item, i) => (
+              <a key={item}><em>{String(i+1).padStart(2,'0')}</em>{item}</a>
+            ))}
+          </div>
+          <div className="v5-rail-note">לא עוד “AI יעשה הכל”. יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.</div>
+        </aside>
+
+        <article className="v5-longform" data-v5-reveal>
+          <div className="v5-longform-meta">
+            <span>מדריך</span>
+            <span>09.05.2026</span>
+            <span>יואב לוי</span>
+            <span>11 דק׳</span>
+          </div>
+
+          <div className="v5-longform-hero">
+            <V5ArticleVisual/>
+          </div>
+
+          <p className="lead">
+            כל שבוע נולד כלי חדש שמבטיח “אפליקציה בפרומפט אחד”. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו
+            הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.
+          </p>
+
+          <h3>1. מתחילים מבעיה קטנה, לא מסוכן כל־יכול</h3>
+          <p>
+            הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה:
+            סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.
+          </p>
+
+          <blockquote>
+            “וייב קודינג טוב הוא לא לוותר על ארכיטקטורה. הוא להזיז אותה קדימה מהר יותר.”
+          </blockquote>
+
+          <div className="v5-method-card">
+            <span className="mono">PROMPT CONTRACT</span>
+            <code>{`role: senior implementation agent
+input: issue + repo context
+rules: ask only when blocked
+output: patch + tests + risks`}</code>
+          </div>
+
+          <h3>2. בונים שלוש שכבות: מודל, כלים, שמירה</h3>
+          <p>
+            למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו.
+            זה המקום שבו MCP, הרשאות, בדיקות ו־CI הופכים מאביזרים ל־infrastructure.
+          </p>
+
+          <div className="v5-compare-strip">
+            <div><span>דמו</span><strong>prompt → wow</strong><em>מהיר, שביר</em></div>
+            <div><span>מוצר</span><strong>context → tools → tests</strong><em>איטי יותר, אמיתי</em></div>
+            <div><span>צוות</span><strong>agent → review → ship</strong><em>הקצב הנכון</em></div>
+          </div>
+
+          <h3>3. משחררים רק אחרי שיש דרך לדעת שנשבר</h3>
+          <p>
+            אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת
+            עוזר או רק עושה רעש יפה.
+          </p>
+        </article>
+
+        <aside className="v5-related" data-v5-reveal style={{'--ex':'-26px'}}>
+          <h3>המשך קריאה</h3>
+          {V5_RELATED.map(item => (
+            <a key={item.title}>
+              <strong>{item.title}</strong>
+              <span className="mono">{item.meta}</span>
+            </a>
+          ))}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function V5ArticleVisual() {
+  return (
+    <svg viewBox="0 0 920 430" preserveAspectRatio="xMidYMid slice">
+      <rect width="920" height="430" fill="#11110d"/>
+      <g opacity="0.23" stroke="#f4f0e8">
+        {[...Array(16)].map((_, i) => <line key={'h'+i} x1="0" y1={i*32} x2="920" y2={i*32}/>)}
+        {[...Array(28)].map((_, i) => <line key={'v'+i} x1={i*36} y1="0" x2={i*36} y2="430"/>)}
+      </g>
+      <g transform="translate(120 78)">
+        <rect x="0" y="0" width="260" height="170" rx="18" fill="#88a884"/>
+        <text x="28" y="62" fontFamily="JetBrains Mono" fontSize="24" fontWeight="700" fill="#11110d">{'{issue}'}</text>
+        <text x="28" y="108" fontFamily="Heebo" fontSize="34" fontWeight="900" fill="#11110d">בעיה קטנה</text>
+      </g>
+      <path d="M392 160 C482 80 520 270 620 170" stroke="#7da4be" strokeWidth="8" fill="none" strokeLinecap="round"/>
+      <g transform="translate(610 132) rotate(-4)">
+        <rect x="0" y="0" width="210" height="140" rx="18" fill="#c0d8e8"/>
+        <text x="26" y="58" fontFamily="Instrument Serif" fontStyle="italic" fontSize="52" fill="#11110d">agent.</text>
+        <text x="28" y="98" fontFamily="JetBrains Mono" fontSize="14" fill="#11110d">tools + tests</text>
+      </g>
+      <circle cx="500" cy="330" r="54" fill="#b89cc4"/>
+      <text x="500" y="340" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="18" fontWeight="700" fill="#11110d">SHIP</text>
+      <text x="52" y="376" fontFamily="Instrument Serif" fontStyle="italic" fontSize="74" fill="#f4f0e8">from chaos to production.</text>
+    </svg>
+  );
+}
+
 // ============== INFINITY CANVAS — 3 streams ==============
 function V5Canvas() {
   return (
     <section className="v5-canvas">
       <div className="v5-canvas-head">
-        <div className="v5-eyebrow">[ §04 — INFINITY ]</div>
+        <div className="v5-eyebrow">[ §06 — INFINITY ]</div>
         <h2>הכל זורם. <span className="serif">לכל הכיוונים.</span></h2>
       </div>
       <div className="v5-streams">
@@ -644,6 +898,8 @@ function VariationFive() {
       <V5Ticker/>
       <V5Newsroom/>
       <V5ArticleWall/>
+      <V5CategoryPage/>
+      <V5ArticleTemplate/>
       <V5Canvas/>
       <V5Cta/>
       <V5Foot/>

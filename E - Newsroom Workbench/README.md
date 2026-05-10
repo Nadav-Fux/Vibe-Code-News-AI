@@ -1,6 +1,6 @@
 # E — Newsroom Workbench
 
-**Concept:** Newsroom homepage built in the Workbench language. Hero with parallax floating words, **side-by-side Newsroom row** (chat skin-switcher on the right, **🔥 Hot Billboard** on the left), then **The Wall** — every article/guide/comparison is a draggable, expandable post-it, scattered semi-organically, filterable by category. Bottom: a paper-toned **Infinity Canvas** with three marquee streams (categories, article titles, italic quotes) flowing in alternating directions on mustard / sage / sky bands.
+**Concept:** Newsroom homepage built in the Workbench language. Hero with parallax floating words, **side-by-side Newsroom row** (chat skin-switcher on the right, **Hot Billboard** on the left), then **The Wall** — every article/guide/comparison is a draggable, expandable post-it. The new layer adds a full **Article Library** category-page template and a longform **Article Template** for guides, essays, comparisons, and tool reviews. Bottom: a paper-toned **Infinity Canvas** with three marquee streams.
 
 ## Run
 
@@ -19,8 +19,10 @@ Open `index.html` (or `E - Newsroom Workbench.html`) in a browser. React + Babel
 
 The E design went through several rounds of feedback — the version in this folder reflects the final state:
 
-- **Hero:** "מה חדש היום?" word-by-word drop-in animation; ink pill `• nVision [AI]`; typewriter rotator (וויב קודינג → סוכנים → מודלים → מוצרים → סטארטאפים) with coral caret.
-- **Newsroom row** (locked 2-column grid, not stacked): WhatsApp/Telegram/Messenger phone on the right with a real skin switcher; **Hot Billboard** on the left — italic-serif rank numerals, sparklines, ▲▼NEW deltas, flames on top-2.
+- **Hero:** "מה חדש היום?" word-by-word drop-in animation; ink pill `• nVision [AI]`; typewriter rotator (וויב קודינג → סוכנים → מודלים → מוצרים → סטארטאפים) with cobalt caret.
+- **Newsroom row:** WhatsApp/Telegram/Messenger phone with a real skin switcher; **Hot Billboard** — italic-serif rank numerals, sparklines, ▲▼NEW deltas, star marker on top-2.
 - **The Wall:** post-its scattered with `position: absolute` and rotation, **fully draggable**, click "+ פתח" to accordion-expand summary + read-more. Filter chips at top dim non-matching notes in place (don't reflow).
+- **Article Library:** category-page layout with filter chips, editor-pick feature card, chaotic article cards, and reading-track sidebar.
+- **Article Template:** longform RTL article shell with TL;DR rail, sticky reading map, hero visual, pullquote, prompt/code card, comparison strip, and related articles.
 - **Infinity Canvas:** paper background with three colored bands (mustard / sage / sky), three marquee streams (LTR / RTL / LTR), enough duplicated items that it never empties. Hover pauses a stream.
-- **Palette:** paper #f4f0e8, coral #d65a3a (used sparingly — user dislikes prominent orange), mustard, sage, lavender, sky. No neon, no cyber.
+- **Palette:** paper #f4f0e8, ink, cobalt #3f6df6, sage, sky, lavender, acid-yellow. Orange/coral was removed from the visible language.
