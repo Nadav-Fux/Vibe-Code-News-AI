@@ -12,8 +12,10 @@ Open `index.html` (or `E - Newsroom Workbench.html`) in a browser. React + Babel
 |---|---|
 | `index.html` | Entry point — mounts `<VariationFive />`. |
 | `E - Newsroom Workbench.html` | Identical copy under the original design name. |
+| `articles.html` | Dedicated articles/category page for Variation E. |
+| `article.html` | Dedicated single-article page for Variation E. |
 | `v5-styles.css` | All styles (palette, hero typewriter, post-it grid, billboard sparklines, three-stream canvas, skin-switcher chrome). |
-| `v5-newsroom.jsx` | Self-contained `VariationFive` component. |
+| `v5-newsroom.jsx` | Shared React source for the home page, articles page, and single-article page. |
 
 ## Implementation notes from the source chat
 

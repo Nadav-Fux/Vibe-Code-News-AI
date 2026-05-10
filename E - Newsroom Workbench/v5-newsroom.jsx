@@ -112,16 +112,34 @@ const V5_PATHS = [
 ];
 
 const V5_ARTICLE_OUTLINE = [
-  'מה השתנה בפיתוח עם AI',
-  'הסטאק המינימלי לסוכן עובד',
-  'איפה מודלים נופלים בפרודקשן',
-  'צ׳קליסט לפני שמשחררים',
+  { id:'article-intro', title:'מה השתנה בפיתוח עם AI' },
+  { id:'article-stack', title:'הסטאק המינימלי לסוכן עובד' },
+  { id:'article-risks', title:'איפה מודלים נופלים בפרודקשן' },
+  { id:'article-ship', title:'צ׳קליסט לפני שמשחררים' },
 ];
 
 const V5_RELATED = [
   { title:'הפרוטוקול הקטן שמסדר MCP', meta:'מדריך · 9 דק׳' },
   { title:'מה למדנו מ־47 משימות Claude', meta:'מאמר עומק · 12 דק׳' },
   { title:'האם Linear AI באמת מנהל מוצר?', meta:'סקירה · 6 דק׳' },
+];
+
+const V5_LINKS = {
+  home: 'index.html#home',
+  news: 'index.html#news',
+  articles: 'articles.html',
+  article: 'article.html',
+  tools: 'index.html#tools',
+  community: 'index.html#community',
+};
+
+const V5_NAV_ITEMS = [
+  { key:'home', label:'בית', href:V5_LINKS.home },
+  { key:'news', label:'חדשות', href:V5_LINKS.news },
+  { key:'articles', label:'מאמרים', href:V5_LINKS.articles },
+  { key:'article', label:'מדריכים', href:V5_LINKS.article },
+  { key:'tools', label:'כלים', href:V5_LINKS.tools },
+  { key:'community', label:'קהילה', href:V5_LINKS.community },
 ];
 
 // ===== Drag hook =====
@@ -192,7 +210,7 @@ function useV5Reveal() {
 
 // =================== COMPONENTS ===================
 
-function V5Nav() {
+function V5Nav({ activeKey = 'home' }) {
   const [time, setTime] = useV5S('14:32');
   useV5E(() => {
     const tick = () => {
@@ -206,32 +224,35 @@ function V5Nav() {
   return (
     <header className="v5-nav">
       <div className="v5-nav-l">
-        <div className="v5-mark">
+        <a className="v5-mark" href={V5_LINKS.home}>
           <svg viewBox="0 0 60 60">
             <rect x="0" y="0" width="60" height="60" rx="14" fill="#11110d"/>
             <path d="M14 18 Q14 12 20 12 L40 12 Q46 12 46 18 L46 36 Q46 42 40 42 L26 42 L18 50 L20 42 Q14 42 14 36 Z" fill="#88a884"/>
             <text x="30" y="32" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="11" fontWeight="700" fill="#11110d">n.</text>
           </svg>
-        </div>
+        </a>
         <div className="v5-name">
           <strong>nVision <span style={{color:'#88a884'}}>·</span> AI</strong>
           <span className="mono">VIBE CODE NEWS · TLV</span>
         </div>
       </div>
       <nav className="v5-nav-c">
-        <a className="active" href="#">בית</a>
-        <a href="#">חדשות</a>
-        <a href="#">מאמרים</a>
-        <a href="#">מדריכים</a>
-        <a href="#">כלים</a>
-        <a href="#">קהילה</a>
+        {V5_NAV_ITEMS.map((item) => (
+          <a
+            key={item.href}
+            className={activeKey === item.key ? 'active' : ''}
+            href={item.href}
+          >
+            {item.label}
+          </a>
+        ))}
       </nav>
       <div className="v5-nav-r">
         <div className="v5-nav-clock">
           <span className="v5-pulse"></span>
           <span>LIVE · {time}</span>
         </div>
-        <button className="v5-join-btn">הצטרף לערוץ <span>↗</span></button>
+        <a className="v5-join-btn" href={V5_LINKS.community}>הצטרף לערוץ <span>↗</span></a>
       </div>
     </header>
   );
@@ -295,7 +316,7 @@ function V5Title() {
 function V5Newsroom() {
   const [skin, setSkin] = useV5S('whatsapp');
   return (
-    <section className="v5-newsroom">
+    <section id="news" className="v5-newsroom">
       <div className="v5-newsroom-head">
         <div className="v5-eyebrow">[ §02 — NEWSROOM ]</div>
         <h2>
@@ -340,7 +361,7 @@ function V5Newsroom() {
           </div>
           <div className="v5-hot-list">
             {V5_HOT.map((row) => (
-              <a key={row.rank} className={`v5-hot-row ${row.rank<=2?'is-fire':''} ${row.dir==='dn'?'dn':''} cat-${row.cat.split(' ')[0]}`}>
+              <a key={row.rank} href={V5_LINKS.article} className={`v5-hot-row ${row.rank<=2?'is-fire':''} ${row.dir==='dn'?'dn':''} cat-${row.cat.split(' ')[0]}`}>
                 <span className="v5-hot-rk">{String(row.rank).padStart(2,'0')}</span>
                 <div className="v5-hot-mid">
                   <div className="v5-hot-meta">
@@ -359,7 +380,7 @@ function V5Newsroom() {
           </div>
           <div className="v5-hot-foot">
             <span className="live">UPDATED 14:32</span>
-            <a>כל הדירוג ↗</a>
+            <a href={V5_LINKS.articles}>כל הדירוג ↗</a>
           </div>
         </div>
       </div>
@@ -484,7 +505,7 @@ function V5ArticleWall() {
   const positions = V5_POS;
 
   return (
-    <section className="v5-wall">
+    <section id="tools" className="v5-wall">
       <div className="v5-sec-head">
         <div className="v5-eyebrow">[ §03 — THE WALL ]</div>
         <h2>קיר <span className="serif">המאמרים.</span></h2>
@@ -526,7 +547,7 @@ function V5ArticlePostit({ a, pos, visible }) {
       <h4>{a.title}</h4>
       <div className="v5-pn-body">
         <p>{a.body}</p>
-        <a className="v5-pn-link" data-no-drag>קרא את המאמר ↗</a>
+        <a className="v5-pn-link" href={V5_LINKS.article} data-no-drag>קרא את המאמר ↗</a>
       </div>
       <div className="v5-pn-foot">
         <span className="mono">{a.author}</span>
@@ -550,7 +571,7 @@ function V5CategoryPage() {
   const hero = visible[0] || V5_ARTICLES[0];
 
   return (
-    <section className="v5-category">
+    <section id="articles" className="v5-category">
       <div className="v5-cat-bg-word">LIBRARY</div>
       <div className="v5-cat-head" data-v5-reveal>
         <div>
@@ -596,14 +617,14 @@ function V5CategoryPage() {
             </div>
             <h3>{hero.title}</h3>
             <p>{hero.body}</p>
-            <a>פתח טמפלט מאמר ↙</a>
+            <a href={V5_LINKS.article}>פתח טמפלט מאמר ↙</a>
           </div>
         </article>
 
         <aside className="v5-cat-side" data-v5-reveal style={{'--ex':'-24px'}}>
           <h3><span className="serif">מסלולי</span> קריאה</h3>
           {V5_PATHS.map((path, i) => (
-            <a key={path.label} className={`v5-path v5-path-${path.tone}`} style={{'--rot': `${i % 2 ? -1.6 : 1.4}deg`}}>
+            <a key={path.label} href={V5_LINKS.article} className={`v5-path v5-path-${path.tone}`} style={{'--rot': `${i % 2 ? -1.6 : 1.4}deg`}}>
               <span className="mono">TRACK {String(i+1).padStart(2,'0')} · {path.count}</span>
               <strong>{path.label}</strong>
               <em>{path.title}</em>
@@ -623,7 +644,7 @@ function V5CategoryPage() {
               <div className="v5-cat-card-foot">
                 <span className="mono">{a.author}</span>
                 <span className="mono">{a.read}</span>
-                <a>↙</a>
+                <a href={V5_LINKS.article}>↙</a>
               </div>
             </article>
           ))}
@@ -636,7 +657,7 @@ function V5CategoryPage() {
 // ============== ARTICLE TEMPLATE — longform page mock ==============
 function V5ArticleTemplate() {
   return (
-    <section className="v5-article-template">
+    <section id="guides" className="v5-article-template">
       <div className="v5-article-paper"></div>
       <div className="v5-article-top" data-v5-reveal>
         <div className="v5-article-labels">
@@ -663,7 +684,7 @@ function V5ArticleTemplate() {
           <div className="v5-rail-card v5-rail-dark">
             <span className="mono">READING MAP</span>
             {V5_ARTICLE_OUTLINE.map((item, i) => (
-              <a key={item}><em>{String(i+1).padStart(2,'0')}</em>{item}</a>
+              <a key={item.id} href={`#${item.id}`}><em>{String(i+1).padStart(2,'0')}</em>{item.title}</a>
             ))}
           </div>
           <div className="v5-rail-note">לא עוד “AI יעשה הכל”. יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.</div>
@@ -681,12 +702,12 @@ function V5ArticleTemplate() {
             <V5ArticleVisual/>
           </div>
 
-          <p className="lead">
+          <p id="article-intro" className="lead">
             כל שבוע נולד כלי חדש שמבטיח “אפליקציה בפרומפט אחד”. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו
             הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.
           </p>
 
-          <h3>1. מתחילים מבעיה קטנה, לא מסוכן כל־יכול</h3>
+          <h3 id="article-stack">1. מתחילים מבעיה קטנה, לא מסוכן כל־יכול</h3>
           <p>
             הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה:
             סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.
@@ -704,7 +725,7 @@ rules: ask only when blocked
 output: patch + tests + risks`}</code>
           </div>
 
-          <h3>2. בונים שלוש שכבות: מודל, כלים, שמירה</h3>
+          <h3 id="article-risks">2. בונים שלוש שכבות: מודל, כלים, שמירה</h3>
           <p>
             למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו.
             זה המקום שבו MCP, הרשאות, בדיקות ו־CI הופכים מאביזרים ל־infrastructure.
@@ -716,7 +737,7 @@ output: patch + tests + risks`}</code>
             <div><span>צוות</span><strong>agent → review → ship</strong><em>הקצב הנכון</em></div>
           </div>
 
-          <h3>3. משחררים רק אחרי שיש דרך לדעת שנשבר</h3>
+          <h3 id="article-ship">3. משחררים רק אחרי שיש דרך לדעת שנשבר</h3>
           <p>
             אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת
             עוזר או רק עושה רעש יפה.
@@ -726,7 +747,7 @@ output: patch + tests + risks`}</code>
         <aside className="v5-related" data-v5-reveal style={{'--ex':'-26px'}}>
           <h3>המשך קריאה</h3>
           {V5_RELATED.map(item => (
-            <a key={item.title}>
+            <a key={item.title} href={V5_LINKS.articles}>
               <strong>{item.title}</strong>
               <span className="mono">{item.meta}</span>
             </a>
@@ -797,7 +818,7 @@ function V5Stream({ items, dir, speed, tone }) {
 
 function V5StreamCat({ c }) {
   return (
-    <a className="v5-s-cat">
+    <a className="v5-s-cat" href={V5_LINKS.articles}>
       <span className="serif">{c.en}</span>
       <span className="he">{c.he}</span>
       <span className="mono">{c.count}</span>
@@ -807,7 +828,7 @@ function V5StreamCat({ c }) {
 
 function V5StreamArt({ a }) {
   return (
-    <a className={`v5-s-art tone-${a.color}`}>
+    <a className={`v5-s-art tone-${a.color}`} href={V5_LINKS.article}>
       <span className="mono">{a.cat}</span>
       <strong>{a.title}</strong>
       <span className="v5-s-art-arrow">↗</span>
@@ -852,14 +873,14 @@ function V5Ticker() {
 
 function V5Cta() {
   return (
-    <section className="v5-cta">
+    <section id="community" className="v5-cta">
       <div className="v5-cta-ghost">JOIN · JOIN · JOIN</div>
       <h2>לחץ על הכפתור.<br/><span className="serif">הכל יגיע אליך.</span></h2>
       <p>בלי טופס. בלי אימייל. רק WhatsApp / Telegram / Messenger.</p>
       <div className="v5-cta-row">
-        <button className="v5-cta-btn primary">הצטרף ב־WhatsApp <span>↗</span></button>
-        <button className="v5-cta-btn ghost">Telegram ↗</button>
-        <button className="v5-cta-btn ghost">Messenger ↗</button>
+        <a className="v5-cta-btn primary" href={V5_LINKS.community}>הצטרף ב־WhatsApp <span>↗</span></a>
+        <a className="v5-cta-btn ghost" href={V5_LINKS.community}>Telegram ↗</a>
+        <a className="v5-cta-btn ghost" href={V5_LINKS.community}>Messenger ↗</a>
       </div>
     </section>
   );
@@ -874,9 +895,9 @@ function V5Foot() {
           <div className="mono" style={{marginTop: 8}}>VIBE CODE NEWS · ISSUE №247</div>
         </div>
         <div className="v5-foot-cols">
-          <div><h5>CONTENT</h5><a>חדשות</a><a>מאמרים</a><a>מדריכים</a><a>קייסים</a></div>
-          <div><h5>CHANNELS</h5><a>WhatsApp ↗</a><a>Telegram ↗</a><a>Messenger ↗</a><a>RSS</a></div>
-          <div><h5>LEGAL</h5><a>פרטיות</a><a>תנאים</a><a>צור קשר</a></div>
+          <div><h5>CONTENT</h5><a href={V5_LINKS.news}>חדשות</a><a href={V5_LINKS.articles}>מאמרים</a><a href={V5_LINKS.article}>מדריכים</a><a href={V5_LINKS.tools}>קייסים</a></div>
+          <div><h5>CHANNELS</h5><a href={V5_LINKS.community}>WhatsApp ↗</a><a href={V5_LINKS.community}>Telegram ↗</a><a href={V5_LINKS.community}>Messenger ↗</a><a href={V5_LINKS.community}>RSS</a></div>
+          <div><h5>LEGAL</h5><a href={V5_LINKS.home}>פרטיות</a><a href={V5_LINKS.home}>תנאים</a><a href={V5_LINKS.community}>צור קשר</a></div>
         </div>
       </div>
       <div className="v5-foot-mark">nVision<span>.</span></div>
@@ -884,12 +905,10 @@ function V5Foot() {
   );
 }
 
-function VariationFive() {
-  useV5Reveal();
+function V5HomePage() {
   return (
-    <div className="v5-root" dir="rtl">
-      <V5Nav/>
-      <main className="v5-hero">
+    <>
+      <main id="home" className="v5-hero">
         <div className="v5-paper"></div>
         <div className="v5-grain"></div>
         <V5Keywords/>
@@ -902,9 +921,50 @@ function VariationFive() {
       <V5ArticleTemplate/>
       <V5Canvas/>
       <V5Cta/>
+    </>
+  );
+}
+
+function V5ArticlesPage() {
+  return (
+    <>
+      <V5Ticker/>
+      <V5CategoryPage/>
+      <V5Canvas/>
+      <V5Cta/>
+    </>
+  );
+}
+
+function V5ArticlePage() {
+  return (
+    <>
+      <V5Ticker/>
+      <V5ArticleTemplate/>
+      <V5Cta/>
+    </>
+  );
+}
+
+function V5App({ page = 'home' }) {
+  useV5Reveal();
+  const activeKey = page === 'articles' ? 'articles' : page === 'article' ? 'article' : 'home';
+  return (
+    <div className={`v5-root v5-page-${page}`} dir="rtl">
+      <V5Nav activeKey={activeKey}/>
+      {page === 'articles' ? <V5ArticlesPage/> : page === 'article' ? <V5ArticlePage/> : <V5HomePage/>}
       <V5Foot/>
     </div>
   );
 }
 
-window.VariationFive = VariationFive;
+function mountVariationFive() {
+  const page = document.body.dataset.page || 'home';
+  ReactDOM.createRoot(document.getElementById('root')).render(<V5App page={page} />);
+}
+
+window.V5App = V5App;
+window.mountVariationFive = mountVariationFive;
+window.VariationFive = function VariationFive() {
+  return <V5App page="home" />;
+};
