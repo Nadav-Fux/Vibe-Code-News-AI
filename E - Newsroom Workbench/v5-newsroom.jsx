@@ -118,10 +118,23 @@ const V5_ARTICLE_OUTLINE = [
   { id:'article-ship', title:'צ׳קליסט לפני שמשחררים' },
 ];
 
+const V5_TEMPLATE_OUTLINE = [
+  { id:'article-intro', title:'Hook, promise, and reader payoff' },
+  { id:'article-stack', title:'Context, problem, and why now' },
+  { id:'article-risks', title:'Main body: insight, comparison, examples' },
+  { id:'article-ship', title:'Ending: takeaway and next step' },
+];
+
 const V5_RELATED = [
   { title:'הפרוטוקול הקטן שמסדר MCP', meta:'מדריך · 9 דק׳' },
   { title:'מה למדנו מ־47 משימות Claude', meta:'מאמר עומק · 12 דק׳' },
   { title:'האם Linear AI באמת מנהל מוצר?', meta:'סקירה · 6 דק׳' },
+];
+
+const V5_TEMPLATE_RELATED = [
+  { title:'ראה מאמר דוגמה מלא', meta:'DEMO ARTICLE', href:'article.html?view=demo' },
+  { title:'חזור לספריית המאמרים', meta:'ARTICLE LIBRARY', href:'articles.html' },
+  { title:'פתח את עמוד הבית של E', meta:'NEWSROOM HOME', href:'index.html#home' },
 ];
 
 const V5_LINKS = {
@@ -129,6 +142,7 @@ const V5_LINKS = {
   news: 'index.html#news',
   articles: 'articles.html',
   article: 'article.html',
+  articleDemo: 'article.html?view=demo',
   tools: 'index.html#tools',
   community: 'index.html#community',
 };
@@ -365,7 +379,7 @@ function V5Newsroom() {
           </div>
           <div className="v5-hot-list">
             {V5_HOT.map((row) => (
-              <a key={row.rank} href={V5_LINKS.article} className={`v5-hot-row ${row.rank<=2?'is-fire':''} ${row.dir==='dn'?'dn':''} cat-${row.cat.split(' ')[0]}`}>
+              <a key={row.rank} href={V5_LINKS.articleDemo} className={`v5-hot-row ${row.rank<=2?'is-fire':''} ${row.dir==='dn'?'dn':''} cat-${row.cat.split(' ')[0]}`}>
                 <span className="v5-hot-rk">{String(row.rank).padStart(2,'0')}</span>
                 <div className="v5-hot-mid">
                   <div className="v5-hot-meta">
@@ -551,7 +565,7 @@ function V5ArticlePostit({ a, pos, visible }) {
       <h4>{a.title}</h4>
       <div className="v5-pn-body">
         <p>{a.body}</p>
-        <a className="v5-pn-link" href={V5_LINKS.article} data-no-drag>קרא את המאמר ↗</a>
+        <a className="v5-pn-link" href={V5_LINKS.articleDemo} data-no-drag>קרא את המאמר ↗</a>
       </div>
       <div className="v5-pn-foot">
         <span className="mono">{a.author}</span>
@@ -657,7 +671,7 @@ function V5CategoryPage() {
               <div className="v5-cat-card-foot">
                 <span className="mono">{a.author}</span>
                 <span className="mono">{a.read}</span>
-                <a href={V5_LINKS.article}>↙</a>
+                <a href={V5_LINKS.articleDemo}>↙</a>
               </div>
             </article>
           ))}
@@ -668,103 +682,134 @@ function V5CategoryPage() {
 }
 
 // ============== ARTICLE TEMPLATE — longform page mock ==============
-function V5ArticleTemplate() {
+function V5ArticleTemplate({ mode = 'new' }) {
+  const isDemo = mode === 'demo';
+  const outline = isDemo ? V5_ARTICLE_OUTLINE : V5_TEMPLATE_OUTLINE;
+  const related = isDemo
+    ? V5_RELATED.map((item) => ({ ...item, href: V5_LINKS.articles }))
+    : V5_TEMPLATE_RELATED;
+
   return (
     <section id="guides" className="v5-article-template">
       <div className="v5-article-paper"></div>
       <div className="v5-article-top" data-v5-reveal>
         <div className="v5-article-labels">
-          <span>§05 — ARTICLE TEMPLATE</span>
-          <span>מדריך / מאמר / השוואה</span>
-          <span>RTL READY</span>
+          <span>{isDemo ? '§05 - DEMO ARTICLE' : '§05 - NEW ARTICLE TEMPLATE'}</span>
+          <span>{isDemo ? 'מדריך / מאמר / השוואה' : 'טמפלט למדריך / מאמר / השוואה'}</span>
+          <span>{isDemo ? 'RTL READY' : 'READY TO FILL'}</span>
         </div>
         <h2>
-          בונים סוכן AI ב־Cursor:
-          <span className="serif"> מהפתק הראשון לפרודקשן.</span>
+          {isDemo ? 'בונים סוכן AI ב-Cursor:' : 'כאן נכנסת הכותרת.'}
+          <span className="serif">{isDemo ? ' מהפתק הראשון לפרודקשן.' : ' כאן נבנה ההוק של המאמר.'}</span>
         </h2>
         <p>
-          הטמפלט הזה בנוי למאמר ארוך, מדריך פרקטי או השוואת מודלים. הוא שומר על השפה של E:
-          נייר, שולחן מערכת, הערות בצד, אבל נותן חוויית קריאה נקייה מספיק כדי לא לעייף.
+          {isDemo
+            ? 'זה עמוד דוגמה מלא כדי לראות איך מאמר נראה באופציה E: עם היררכיה, ויזואל, TL;DR, ציטוט, קוד וקישורי המשך.'
+            : 'זה עמוד הטמפלט שפותחים כשמתחילים מאמר חדש. המבנה, הקצב והאווירה כבר בפנים; עכשיו אפשר לצקת לתוכם את הסיפור עצמו.'}
           <span className="v5-article-links">
             <a href={V5_LINKS.articles}>חזרה לספריית המאמרים</a>
-            <a href={V5_LINKS.article}>פתח מאמר חדש</a>
+            <a href={isDemo ? V5_LINKS.article : V5_LINKS.articleDemo}>{isDemo ? 'פתח מאמר חדש' : 'ראה מאמר דוגמה מלא'}</a>
           </span>
         </p>
       </div>
 
       <div className="v5-article-shell">
-        <aside className="v5-article-rail" data-v5-reveal style={{'--ex':'26px'}}>
+        <aside className="v5-article-rail" data-v5-reveal style={{ '--ex': '26px' }}>
           <div className="v5-rail-card">
             <strong>TL;DR</strong>
-            <p>Cursor + MCP + מודל טוב הם לא מוצר. צריך גבולות, בדיקות, לוגים ו־rollback.</p>
+            <p>{isDemo ? 'Cursor + MCP + מודל טוב הם לא מוצר. צריך גבולות, בדיקות, לוגים ו-rollback.' : 'כאן מכניסים ב-2 או 3 שורות את ה-takeaway של המאמר, כדי שגם סריקה מהירה תעבוד.'}</p>
           </div>
           <div className="v5-rail-card v5-rail-dark">
             <span className="mono">READING MAP</span>
-            {V5_ARTICLE_OUTLINE.map((item, i) => (
-              <a key={item.id} href={`#${item.id}`}><em>{String(i+1).padStart(2,'0')}</em>{item.title}</a>
+            {outline.map((item, i) => (
+              <a key={item.id} href={`#${item.id}`}><em>{String(i + 1).padStart(2, '0')}</em>{item.title}</a>
             ))}
           </div>
-          <div className="v5-rail-note">לא עוד “AI יעשה הכל”. יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.</div>
+          <div className="v5-rail-note">{isDemo ? 'לא עוד "AI יעשה הכל". יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.' : 'טיפ: אם הפתיחה לא מייצרת סקרנות תוך 3 שורות, הקורא כבר בדרך החוצה.'}</div>
         </aside>
 
         <article className="v5-longform" data-v5-reveal>
           <div className="v5-longform-meta">
-            <span>מדריך</span>
-            <span>09.05.2026</span>
-            <span>יואב לוי</span>
-            <span>11 דק׳</span>
+            <span>{isDemo ? 'מדריך' : 'סוג מאמר'}</span>
+            <span>{isDemo ? '09.05.2026' : 'DD.MM.YYYY'}</span>
+            <span>{isDemo ? 'יואב לוי' : 'AUTHOR NAME'}</span>
+            <span>{isDemo ? '11 דק׳' : 'X דק׳ קריאה'}</span>
           </div>
 
           <div className="v5-longform-hero">
-            <V5ArticleVisual/>
+            <V5ArticleVisual />
           </div>
 
           <p id="article-intro" className="lead">
-            כל שבוע נולד כלי חדש שמבטיח “אפליקציה בפרומפט אחד”. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו
-            הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.
+            {isDemo
+              ? 'כל שבוע נולד כלי חדש שמבטיח אפליקציה בפרומפט אחד. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.'
+              : 'כאן נכנס הפתיח הראשי של המאמר. הוא אמור להסביר מה הבעיה, למה דווקא עכשיו, ומה בדיוק הקורא ירוויח אם יישאר עד הסוף.'}
           </p>
 
-          <h3 id="article-stack">1. מתחילים מבעיה קטנה, לא מסוכן כל־יכול</h3>
+          <h3 id="article-stack">{isDemo ? '1. מתחילים מבעיה קטנה, לא מסוכן כל-יכול' : '1. פרק ראשון: ממסגרים את הבעיה'}</h3>
           <p>
-            הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה:
-            סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.
+            {isDemo
+              ? 'הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה: סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.'
+              : 'בפרק הזה מגדירים את החיכוך, הקונטקסט והסיבה לכתיבת המאמר. זה המקום להכניס דוגמה קצרה, נתון מעניין או סצנה שמכניסה את הקורא פנימה.'}
           </p>
 
           <blockquote>
-            “וייב קודינג טוב הוא לא לוותר על ארכיטקטורה. הוא להזיז אותה קדימה מהר יותר.”
+            {isDemo ? '"וייב קודינג טוב הוא לא לוותר על ארכיטקטורה. הוא להזיז אותה קדימה מהר יותר."' : '"כאן נכנס משפט מפתח, ציטוט או takeaway חד שמייצר עצירה קטנה באמצע הקריאה."'}
           </blockquote>
 
           <div className="v5-method-card">
-            <span className="mono">PROMPT CONTRACT</span>
-            <code>{`role: senior implementation agent
+            <span className="mono">{isDemo ? 'PROMPT CONTRACT' : 'ARTICLE BLUEPRINT'}</span>
+            <code>{isDemo ? `role: senior implementation agent
 input: issue + repo context
 rules: ask only when blocked
-output: patch + tests + risks`}</code>
+output: patch + tests + risks` : `headline:
+subheadline:
+reader:
+promise:
+sections:
+  - hook
+  - context
+  - main insight
+  - examples / comparison
+  - conclusion
+cta:`}</code>
           </div>
 
-          <h3 id="article-risks">2. בונים שלוש שכבות: מודל, כלים, שמירה</h3>
+          <h3 id="article-risks">{isDemo ? '2. בונים שלוש שכבות: מודל, כלים, שמירה' : '2. פרק שני: הגוף הראשי של המאמר'}</h3>
           <p>
-            למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו.
-            זה המקום שבו MCP, הרשאות, בדיקות ו־CI הופכים מאביזרים ל־infrastructure.
+            {isDemo
+              ? 'למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו. זה המקום שבו MCP, הרשאות, בדיקות ו-CI הופכים מאביזרים ל-infrastructure.'
+              : 'כאן נכנס עומק אמיתי: השוואות, צעדים, תובנות, פירוקים, תמונות מסך, קטעי קוד או prompts. זה החלק שבו המאמר מפסיק להיות רק כותרת טובה ומתחיל להיות שימושי.'}
           </p>
 
           <div className="v5-compare-strip">
-            <div><span>דמו</span><strong>prompt → wow</strong><em>מהיר, שביר</em></div>
-            <div><span>מוצר</span><strong>context → tools → tests</strong><em>איטי יותר, אמיתי</em></div>
-            <div><span>צוות</span><strong>agent → review → ship</strong><em>הקצב הנכון</em></div>
+            {isDemo ? (
+              <>
+                <div><span>דמו</span><strong>prompt → wow</strong><em>מהיר, שביר</em></div>
+                <div><span>מוצר</span><strong>context → tools → tests</strong><em>איטי יותר, אמיתי</em></div>
+                <div><span>צוות</span><strong>agent → review → ship</strong><em>הקצב הנכון</em></div>
+              </>
+            ) : (
+              <>
+                <div><span>HOOK</span><strong>title → promise</strong><em>מה הקורא יקבל</em></div>
+                <div><span>BODY</span><strong>insight → example → proof</strong><em>העומק שגורם להישאר</em></div>
+                <div><span>END</span><strong>takeaway → action</strong><em>מה לוקחים הלאה</em></div>
+              </>
+            )}
           </div>
 
-          <h3 id="article-ship">3. משחררים רק אחרי שיש דרך לדעת שנשבר</h3>
+          <h3 id="article-ship">{isDemo ? '3. משחררים רק אחרי שיש דרך לדעת שנשבר' : '3. פרק סיום: סגירה, takeaway, CTA'}</h3>
           <p>
-            אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת
-            עוזר או רק עושה רעש יפה.
+            {isDemo
+              ? 'אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת עוזר או רק עושה רעש יפה.'
+              : 'הסוף אמור לסגור את הטענה, לחבר את כל החלקים, ולהשאיר את הקורא עם צעד הבא ברור: מה לבדוק, מה לנסות, או לאן להמשיך מכאן.'}
           </p>
         </article>
 
-        <aside className="v5-related" data-v5-reveal style={{'--ex':'-26px'}}>
-          <h3>המשך קריאה</h3>
-          {V5_RELATED.map(item => (
-            <a key={item.title} href={V5_LINKS.articles}>
+        <aside className="v5-related" data-v5-reveal style={{ '--ex': '-26px' }}>
+          <h3>{isDemo ? 'המשך קריאה' : 'קיצורי דרך'}</h3>
+          {related.map((item) => (
+            <a key={item.title} href={item.href}>
               <strong>{item.title}</strong>
               <span className="mono">{item.meta}</span>
             </a>
@@ -774,7 +819,6 @@ output: patch + tests + risks`}</code>
     </section>
   );
 }
-
 function V5ArticleVisual() {
   return (
     <svg viewBox="0 0 920 430" preserveAspectRatio="xMidYMid slice">
@@ -845,7 +889,7 @@ function V5StreamCat({ c }) {
 
 function V5StreamArt({ a }) {
   return (
-    <a className={`v5-s-art tone-${a.color}`} href={V5_LINKS.article}>
+    <a className={`v5-s-art tone-${a.color}`} href={V5_LINKS.articleDemo}>
       <span className="mono">{a.cat}</span>
       <strong>{a.title}</strong>
       <span className="v5-s-art-arrow">↗</span>
@@ -962,10 +1006,11 @@ function V5ArticlesPage() {
 }
 
 function V5ArticlePage() {
+  const view = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'demo' ? 'demo' : 'new';
   return (
     <>
       <V5Ticker/>
-      <V5ArticleTemplate/>
+      <V5ArticleTemplate mode={view}/>
       <V5Cta/>
     </>
   );
@@ -985,6 +1030,10 @@ function V5App({ page = 'home' }) {
 
 function mountVariationFive() {
   const page = document.body.dataset.page || 'home';
+  if (page === 'article') {
+    const isDemo = new URLSearchParams(window.location.search).get('view') === 'demo';
+    document.title = isDemo ? 'nVision AI · Demo Article · Variation E' : 'nVision AI · New Article Template · Variation E';
+  }
   ReactDOM.createRoot(document.getElementById('root')).render(<V5App page={page} />);
 }
 
@@ -993,3 +1042,4 @@ window.mountVariationFive = mountVariationFive;
 window.VariationFive = function VariationFive() {
   return <V5App page="home" />;
 };
+
