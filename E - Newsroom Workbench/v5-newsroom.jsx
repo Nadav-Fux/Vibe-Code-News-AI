@@ -1,4 +1,4 @@
-// ============== VARIATION 5: NEWSROOM WORKBENCH (rev 2) ==============
+// ============== VARIATION 5: NEWSROOM WORKBENCH (rev 3 — Article Editor) ==============
 const { useState: useV5S, useEffect: useV5E, useRef: useV5R, useMemo: useV5M } = React;
 
 // ===== Background floating keywords =====
@@ -22,7 +22,6 @@ const V5_FEED = [
 ];
 
 // ===== Articles as draggable post-its =====
-// pos auto-distributed in a soft grid + jitter; users can drag.
 const V5_ARTICLES = [
   { id:'a1', cat:'OPINION',   color:'mustard', tag:'מאמר דעה', title:'Vibe Coding הוא לא סוף הפיתוח. הוא ההתחלה.', body:'אחרי שנה של בנייה רק עם פרומפטים, אני בטוח יותר מתמיד שמפתחים לא הולכים לשום מקום — הם פשוט עולים שלב.', author:'נדב גלעד', read:'8 דק׳' },
   { id:'a2', cat:'DEEP DIVE', color:'sky',     tag:'מודלים',     title:'Claude 5 Opus: הניתוח המלא',                     body:'בדקנו 47 משימות. הפתעה אחת, אכזבה אחת, ושינוי משחק בקטגוריה אחת.',                                                       author:'מערכת',     read:'12 דק׳' },
@@ -72,7 +71,6 @@ const V5_QUOTES = [
   '"זמן ה-deploy חשוב יותר מזמן הפיתוח."',
 ];
 
-// curated scattered positions for the article wall
 const V5_POS = [
   { left: '4%',  top: 30,  rot: -2.4 },
   { left: '36%', top: 60,  rot:  1.6 },
@@ -145,13 +143,14 @@ const V5_LINKS = {
   articleDemo: 'article.html?view=demo',
   tools: 'index.html#tools',
   community: 'index.html#community',
+  editor: 'articles.html?tab=editor',
 };
 
 const V5_NAV_ITEMS = [
   { key:'home', label:'בית', href:V5_LINKS.home },
   { key:'news', label:'חדשות', href:V5_LINKS.news },
   { key:'articles', label:'מאמרים', href:V5_LINKS.articles },
-  { key:'article', label:'מאמר חדש', href:V5_LINKS.article },
+  { key:'article', label:'מאמר חדש', href:V5_LINKS.editor },
   { key:'tools', label:'כלים', href:V5_LINKS.tools },
   { key:'community', label:'קהילה', href:V5_LINKS.community },
 ];
@@ -222,824 +221,1652 @@ function useV5Reveal() {
   }, []);
 }
 
+// =================== STORAGE ===================
+
+const STORAGE_KEY = 'v5_articles';
+
+function loadArticles() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveArticlesToStorage(articles) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
+  window.dispatchEvent(new Event('v5ArticlesChanged'));
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function sanitizeSlug(slug) {
+  if (!slug) return '';
+  return slug
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function saveArticleToLocal(data) {
+  const articles = loadArticles();
+  const slug = sanitizeSlug(data.slug) || data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const existingIdx = articles.findIndex(a => a.slug === slug);
+  const now = new Date().toISOString();
+
+  const article = {
+    id: existingIdx >= 0 ? articles[existingIdx].id : generateId(),
+    title: data.title,
+    slug: slug,
+    content: data.content || [],
+    createdAt: existingIdx >= 0 ? articles[existingIdx].createdAt : now,
+    updatedAt: now,
+  };
+
+  if (existingIdx >= 0) {
+    articles[existingIdx] = article;
+  } else {
+    articles.push(article);
+  }
+
+  saveArticlesToStorage(articles);
+  return article;
+}
+
+function deleteArticleFromLocal(slug) {
+  const articles = loadArticles();
+  const filtered = articles.filter(a => a.slug !== slug);
+  if (filtered.length === articles.length) return false;
+  saveArticlesToStorage(filtered);
+  return true;
+}
+
+function getArticleFromLocal(slug) {
+  return loadArticles().find(a => a.slug === slug) || null;
+}
+
+// Sanity API helpers
+var SANITY_PROJECT = 'edmzm8yr';
+var SANITY_DATASET = 'production';
+var SANITY_API_VERSION = '2024-01-01';
+var SANITY_WRITE_TOKEN = ''; // Set via env config or leave empty for local-only
+
+try {
+  // Try to read from env config if available
+  var _env = document.getElementById('_sanity_env');
+  if (_env) {
+    SANITY_WRITE_TOKEN = _env.dataset.writeToken || '';
+  }
+} catch(e) { /* ignore */ }
+
+// Read articles from Sanity (optional - used when connected)
+async function sanityQueryArticles() {
+  try {
+    var url = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
+              '/data/query/' + SANITY_DATASET + '?query=*[_type == "article"]{title, slug, content, _createdAt, _updatedAt}';
+    var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    if (!res.ok) return null;
+    var data = await res.json();
+    return data.result || [];
+  } catch(e) {
+    console.warn('Sanity read failed (this is OK if public API is disabled):', e.message);
+    return null;
+  }
+}
+
+// Write article to Sanity (requires write token)
+async function sanityWriteArticle(doc) {
+  if (!SANITY_WRITE_TOKEN) return null;
+  try {
+    var url = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
+              '/data/mutate/' + SANITY_DATASET;
+    var mutations = [{ create: { _type: 'article', ...doc } }];
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SANITY_WRITE_TOKEN,
+      },
+      body: JSON.stringify({ mutations: mutations }),
+    });
+    return await res.json();
+  } catch(e) {
+    console.warn('Sanity write failed:', e.message);
+    return null;
+  }
+}
+
+// Sync article to Sanity (create or update)
+async function syncArticleToSanity(article) {
+  try {
+    var slugField = typeof article.slug === 'string' ? { _type: 'slug', current: article.slug } : article.slug;
+    var doc = {
+      title: article.title,
+      slug: slugField,
+      content: convertToSanityBlocks(article.content || []),
+      status: 'published',
+      publishedAt: new Date().toISOString(),
+    };
+    var result = await sanityWriteArticle(doc);
+    return result;
+  } catch(e) {
+    console.warn('Sync failed:', e.message);
+    return null;
+  }
+}
+
+// Convert our block format to Sanity portable text
+function convertToSanityBlocks(blocks) {
+  if (!blocks || !blocks.length) return [{ _type: 'block', children: [{ _type: 'span', text: '' }], style: 'normal', markDefs: [] }];
+
+  return blocks.map(function(block) {
+    switch (block.type) {
+      case 'heading': {
+        var level = 2;
+        var match = block.content.match(/^(#{1,6})\s/);
+        if (match) { level = match[1].length; block.content = block.content.replace(/^#{1,6}\s/, ''); }
+        return {
+          _type: 'block',
+          children: [{ _type: 'span', text: block.content, marks: [] }],
+          style: 'h' + level,
+          markDefs: [],
+        };
+      }
+      case 'paragraph': {
+        return {
+          _type: 'block',
+          children: [{ _type: 'span', text: block.content || '', marks: [] }],
+          style: 'normal',
+          markDefs: [],
+        };
+      }
+      case 'image': {
+        return {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: '' },
+          alt: block.content || '',
+        };
+      }
+      case 'code': {
+        return {
+          _type: 'code',
+          code: block.content || '',
+          language: 'javascript',
+          filename: '',
+        };
+      }
+      default: {
+        return {
+          _type: 'block',
+          children: [{ _type: 'span', text: String(block.content || ''), marks: [] }],
+          style: 'normal',
+          markDefs: [],
+        };
+      }
+    }
+  });
+}
+
+// =================== NAVIGATION ===================
+
+function v5Navigate(href) {
+  window.location.href = href;
+}
+
 // =================== COMPONENTS ===================
 
-function V5Nav({ activeKey = 'home' }) {
-  const [time, setTime] = useV5S('14:32');
-  useV5E(() => {
-    const tick = () => {
-      const d = new Date();
-      setTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+function V5Nav({ activeKey }) {
+  var _useState = useV5S('14:32');
+  var time = _useState[0], setTime = _useState[1];
+
+  useV5E(function() {
+    var tick = function() {
+      var d = new Date();
+      setTime(String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'));
     };
     tick();
-    const id = setInterval(tick, 30000);
-    return () => clearInterval(id);
+    var id = setInterval(tick, 30000);
+    return function() { clearInterval(id); };
   }, []);
-  return (
-    <header className="v5-nav">
-      <div className="v5-nav-l">
-        <a className="v5-mark" href={V5_LINKS.home}>
-          <svg viewBox="0 0 60 60">
-            <rect x="0" y="0" width="60" height="60" rx="14" fill="#11110d"/>
-            <path d="M14 18 Q14 12 20 12 L40 12 Q46 12 46 18 L46 36 Q46 42 40 42 L26 42 L18 50 L20 42 Q14 42 14 36 Z" fill="#88a884"/>
-            <text x="30" y="32" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="11" fontWeight="700" fill="#11110d">n.</text>
-          </svg>
-        </a>
-        <div className="v5-name">
-          <strong>nVision <span style={{color:'#88a884'}}>·</span> AI</strong>
-          <span className="mono">VIBE CODE NEWS · TLV</span>
-        </div>
-      </div>
-      <nav className="v5-nav-c">
-        {V5_NAV_ITEMS.map((item) => (
-          <a
-            key={item.href}
-            className={activeKey === item.key ? 'active' : ''}
-            href={item.href}
-          >
-            {item.label}
-          </a>
-        ))}
-      </nav>
-      <div className="v5-nav-r">
-        <div className="v5-nav-clock">
-          <span className="v5-pulse"></span>
-          <span>LIVE · {time}</span>
-        </div>
-        <a className="v5-join-btn" href={V5_LINKS.community}>הצטרף לערוץ <span>↗</span></a>
-      </div>
-    </header>
+
+  return React.createElement('header', { className: 'v5-nav' },
+    React.createElement('div', { className: 'v5-nav-l' },
+      React.createElement('a', { className: 'v5-mark', href: V5_LINKS.home },
+        React.createElement('svg', { viewBox: '0 0 60 60' },
+          React.createElement('rect', { x: 0, y: 0, width: 60, height: 60, rx: 14, fill: '#11110d' }),
+          React.createElement('path', { d: 'M14 18 Q14 12 20 12 L40 12 Q46 12 46 18 L46 36 Q46 42 40 42 L26 42 L18 50 L20 42 Q14 42 14 36 Z', fill: '#88a884' }),
+          React.createElement('text', { x: 30, y: 32, textAnchor: 'middle', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 700, fill: '#11110d' }, 'n.')
+        )
+      ),
+      React.createElement('div', { className: 'v5-name' },
+        React.createElement('strong', null, 'nVision ', React.createElement('span', { style: { color: '#88a884' } }, '·'), ' AI'),
+        React.createElement('span', { className: 'mono' }, 'VIBE CODE NEWS · TLV')
+      )
+    ),
+    React.createElement('nav', { className: 'v5-nav-c' },
+      V5_NAV_ITEMS.map(function(item) {
+        return React.createElement('a', {
+          key: item.href,
+          className: activeKey === item.key ? 'active' : '',
+          href: item.href
+        }, item.label);
+      })
+    ),
+    React.createElement('div', { className: 'v5-nav-r' },
+      React.createElement('div', { className: 'v5-nav-clock' },
+        React.createElement('span', { className: 'v5-pulse' }),
+        React.createElement('span', null, 'LIVE · ' + time)
+      ),
+      React.createElement('a', { className: 'v5-join-btn', href: V5_LINKS.community }, 'הצטרף לערוץ ', React.createElement('span', null, '↗'))
+    )
   );
 }
 
 function V5Keywords() {
-  const ref = useV5Parallax(0.4);
-  return (
-    <div ref={ref} className="v5-bg-kw" style={{transform:'translate3d(0, var(--py, 0), 0)'}}>
-      {V5_KEYWORDS.map((k, i) => {
-        const [text, x, y, size, rot, cls] = k;
-        return <span key={i} className={`v5-kw ${cls}`} style={{left:x,top:y,fontSize:`${size}rem`,transform:`rotate(${rot}deg)`}}>{text}</span>;
-      })}
-    </div>
+  var ref = useV5Parallax(0.4);
+  return React.createElement('div', { ref: ref, className: 'v5-bg-kw', style: { transform: 'translate3d(0, var(--py, 0), 0)' } },
+    V5_KEYWORDS.map(function(k, i) {
+      var text = k[0], x = k[1], y = k[2], size = k[3], rot = k[4], cls = k[5];
+      return React.createElement('span', { key: i, className: 'v5-kw ' + cls, style: { left: x, top: y, fontSize: size + 'rem', transform: 'rotate(' + rot + 'deg)' } }, text);
+    })
   );
 }
 
 function V5RotatingWord() {
-  const words = ['וויב קודינג', 'סוכנים', 'מודלים', 'מוצרים', 'סטארטאפים'];
-  const [i, setI] = useV5S(0);
-  const [t, setT] = useV5S('');
-  useV5E(() => {
-    const word = words[i];
-    let j = 0; let typing = true;
-    const tick = () => {
+  var words = ['וויב קודינג', 'סוכנים', 'מודלים', 'מוצרים', 'סטארטאפים'];
+  var _useState2 = useV5S(0);
+  var i = _useState2[0], setI = _useState2[1];
+  var _useState3 = useV5S('');
+  var t = _useState3[0], setT = _useState3[1];
+
+  useV5E(function() {
+    var word = words[i];
+    var j = 0;
+    var typing = true;
+    var tick = function() {
       if (typing) {
         if (j < word.length) { setT(word.slice(0, ++j)); setTimeout(tick, 70); }
-        else { setTimeout(() => { typing = false; tick(); }, 1800); }
+        else { setTimeout(function() { typing = false; tick(); }, 1800); }
       } else {
         if (j > 0) { setT(word.slice(0, --j)); setTimeout(tick, 35); }
-        else { setI(p => (p + 1) % words.length); }
+        else { setI(function(p) { return (p + 1) % words.length; }); }
       }
     };
     tick();
   }, [i]);
-  return <span className="v5-rotor">{t}<i className="v5-caret"></i></span>;
+
+  return React.createElement('span', { className: 'v5-rotor' }, t, React.createElement('i', { className: 'v5-caret' }));
 }
 
 function V5Title() {
-  return (
-    <div className="v5-title-wrap" data-v5-reveal>
-      <div className="v5-eyebrow-row">[ ISSUE №247 / 09.05.2026 / LIVE ]</div>
-      <h1 className="v5-title">
-        <span className="v5-w-fall" style={{animationDelay:'0.05s'}}>מה</span>{' '}
-        <span className="v5-w-fall serif" style={{animationDelay:'0.18s'}}>חדש</span>{' '}
-        <span className="v5-w-fall" style={{animationDelay:'0.32s'}}>היום?</span>
-      </h1>
-      <div className="v5-title-pill">
-        <span className="v5-pill-dot"></span>
-        nVision <span className="v5-pill-ai">[AI]</span>
-      </div>
-      <div className="v5-title-sub">
-        <span>הבינה המלאכותית, הטכנולוגיה ועולם </span>
-        <span className="v5-rotor-wrap"><V5RotatingWord/></span>
-      </div>
-      <div className="v5-title-actions">
-        <a className="v5-title-action primary" href={V5_LINKS.article}>פתח מאמר חדש ↗</a>
-        <a className="v5-title-action ghost" href={V5_LINKS.articles}>לספריית המאמרים</a>
-      </div>
-    </div>
+  return React.createElement('div', { className: 'v5-title-wrap', 'data-v5-reveal': true },
+    React.createElement('div', { className: 'v5-eyebrow-row' }, '[ ISSUE №247 / 09.05.2026 / LIVE ]'),
+    React.createElement('h1', { className: 'v5-title' },
+      React.createElement('span', { className: 'v5-w-fall', style: { animationDelay: '0.05s' } }, 'מה'), ' ',
+      React.createElement('span', { className: 'v5-w-fall serif', style: { animationDelay: '0.18s' } }, 'חדש'), ' ',
+      React.createElement('span', { className: 'v5-w-fall', style: { animationDelay: '0.32s' } }, 'היום?')
+    ),
+    React.createElement('div', { className: 'v5-title-pill' },
+      React.createElement('span', { className: 'v5-pill-dot' }),
+      'nVision ', React.createElement('span', { className: 'v5-pill-ai' }, '[AI]')
+    ),
+    React.createElement('div', { className: 'v5-title-sub' },
+      React.createElement('span', null, 'הבינה המלאכותית, הטכנולוגיה ועולם '),
+      React.createElement('span', { className: 'v5-rotor-wrap' }, React.createElement(V5RotatingWord))
+    ),
+    React.createElement('div', { className: 'v5-title-actions' },
+      React.createElement('a', { className: 'v5-title-action primary', href: V5_LINKS.editor }, 'פתח מאמר חדש ↗'),
+      React.createElement('a', { className: 'v5-title-action ghost', href: V5_LINKS.articles }, 'לספריית המאמרים')
+    )
   );
 }
 
-// ===== COMBINED: WhatsApp phone + Hot articles panel =====
-function V5Newsroom() {
-  const [skin, setSkin] = useV5S('whatsapp');
-  return (
-    <section id="news" className="v5-newsroom">
-      <div className="v5-newsroom-head">
-        <div className="v5-eyebrow">[ §02 — NEWSROOM ]</div>
-        <h2>
-          הניוזרום שלנו <span className="serif">בכיס שלך.</span>
-        </h2>
-        <p>וואטסאפ, טלגרם או מסנג׳ר — אותו תוכן, אפס פיד אינסופי. רק מה שצריך לדעת, מתי שצריך.</p>
-      </div>
+function V5Chat(_ref) {
+  var skin = _ref.skin;
+  var scrollerRef = useV5R(null);
+  var _useState4 = useV5S(3);
+  var shown = _useState4[0], setShown = _useState4[1];
+  var _useState5 = useV5S(false);
+  var typing = _useState5[0], setTyping = _useState5[1];
 
-      <div className="v5-newsroom-grid">
-        <div className="v5-phone-col" data-v5-reveal style={{'--ey':'40px'}}>
-          <div className="v5-skin-squares">
-            {[
-              ['whatsapp','#25D366','W','WhatsApp'],
-              ['telegram','#2AABEE','T','Telegram'],
-              ['messenger','#0084FF','M','Messenger'],
-            ].map(([k, c, l, n]) => (
-              <button key={k} className={`v5-skin-sq ${skin===k?'active':''} sq-${k}`} onClick={() => setSkin(k)} title={n}>
-                <span style={{background:c}}>{l}</span>
-              </button>
-            ))}
-          </div>
-          <div className="v5-phone">
-            <div className="v5-phone-notch"></div>
-            <div className="v5-phone-screen">
-              <V5Chat skin={skin}/>
-            </div>
-          </div>
-        </div>
-
-        <div className="v5-hot" data-v5-reveal style={{'--ex':'30px'}}>
-          <div className="v5-hot-head">
-            <h3>
-              <span>
-                <small>HOT 06 · WEEKLY</small>
-                הכי <span className="serif">חמים</span>
-              </span>
-            </h3>
-            <div className="v5-hot-meta-bar">
-              <span className="mono">N°247</span>
-              <strong>● LIVE</strong>
-            </div>
-          </div>
-          <div className="v5-hot-list">
-            {V5_HOT.map((row) => (
-              <a key={row.rank} href={V5_LINKS.articleDemo} className={`v5-hot-row ${row.rank<=2?'is-fire':''} ${row.dir==='dn'?'dn':''} cat-${row.cat.split(' ')[0]}`}>
-                <span className="v5-hot-rk">{String(row.rank).padStart(2,'0')}</span>
-                <div className="v5-hot-mid">
-                  <div className="v5-hot-meta">
-                    <span className="v5-hot-cat">{row.cat}</span>
-                    <span className="v5-hot-tool">{row.tool}</span>
-                  </div>
-                  <strong>{row.title}</strong>
-                </div>
-                <V5Sparkline data={row.spark}/>
-                <div className="v5-hot-side">
-                  <span className="score">{row.score}K</span>
-                  <span className={`delta ${row.dir==='dn'?'dn':row.dir==='new'?'new':''}`}>{row.delta}</span>
-                </div>
-              </a>
-            ))}
-          </div>
-          <div className="v5-hot-foot">
-            <span className="live">UPDATED 14:32</span>
-            <a href={V5_LINKS.articles}>כל הדירוג ↗</a>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function V5Sparkline({ data }) {
-  const w = 78, h = 30, pad = 2;
-  const max = Math.max(...data, 1);
-  const step = (w - pad*2) / (data.length - 1);
-  const pts = data.map((v, i) => [pad + i*step, h - pad - (v/max) * (h - pad*2)]);
-  const line = pts.map(p => p.join(',')).join(' ');
-  const area = `${pad},${h-pad} ${line} ${w-pad},${h-pad}`;
-  const last = pts[pts.length-1];
-  return (
-    <svg className="v5-spark" viewBox={`0 0 ${w} ${h}`}>
-      <polygon className="area" points={area}/>
-      <polyline className="line" points={line}/>
-      <circle className="endpt" cx={last[0]} cy={last[1]} r="2.4"/>
-    </svg>
-  );
-}
-
-function V5Chat({ skin }) {
-  const scrollerRef = useV5R(null);
-  const [shown, setShown] = useV5S(3);
-  const [typing, setTyping] = useV5S(false);
-
-  useV5E(() => {
+  useV5E(function() {
     if (shown >= V5_FEED.length) return;
-    const t = setTimeout(() => {
+    var t = setTimeout(function() {
       setTyping(true);
-      const t2 = setTimeout(() => { setTyping(false); setShown(s => s + 1); }, 1100);
-      return () => clearTimeout(t2);
+      var t2 = setTimeout(function() { setTyping(false); setShown(function(s) { return s + 1; }); }, 1100);
+      return function() { clearTimeout(t2); };
     }, 2800);
-    return () => clearTimeout(t);
+    return function() { clearTimeout(t); };
   }, [shown]);
 
-  useV5E(() => { if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight; }, [shown, typing]);
+  useV5E(function() {
+    if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+  }, [shown, typing]);
 
-  return (
-    <div className={`v5-chat skin-${skin}`}>
-      <V5ChatHeader skin={skin} typing={typing}/>
-      <div ref={scrollerRef} className="v5-chat-body">
-        <div className="v5-chat-bg"></div>
-        {V5_FEED.slice(0, shown).map((m, i) => {
-          if (m.type === 'system') return <div key={i} className="v5-system"><span>{m.text}</span></div>;
-          return (
-            <div key={i} className={`v5-msg-row skin-${skin}`}>
-              <div className="v5-bubble">
-                {m.urgent && <span className="v5-chat-urgent">⚡ מבזק</span>}
-                <span className="v5-chat-tag">{m.tag}</span>
-                <p>{m.text}</p>
-                <div className="v5-time">{m.time}{skin==='whatsapp' && <span className="v5-ticks"> ✓✓</span>}</div>
-              </div>
-            </div>
-          );
-        })}
-        {typing && (
-          <div className={`v5-msg-row skin-${skin}`}>
-            <div className="v5-bubble"><div className="v5-typing"><span></span><span></span><span></span></div></div>
-          </div>
-        )}
-      </div>
-      <V5ChatInput skin={skin}/>
-    </div>
+  return React.createElement('div', { className: 'v5-chat skin-' + skin },
+    React.createElement(V5ChatHeader, { skin: skin, typing: typing }),
+    React.createElement('div', { ref: scrollerRef, className: 'v5-chat-body' },
+      React.createElement('div', { className: 'v5-chat-bg' }),
+      V5_FEED.slice(0, shown).map(function(m, i) {
+        if (m.type === 'system') return React.createElement('div', { key: i, className: 'v5-system' }, React.createElement('span', null, m.text));
+        return React.createElement('div', { key: i, className: 'v5-msg-row skin-' + skin },
+          React.createElement('div', { className: 'v5-bubble' },
+            m.urgent && React.createElement('span', { className: 'v5-chat-urgent' }, '⚡ מבזק'),
+            React.createElement('span', { className: 'v5-chat-tag' }, m.tag),
+            React.createElement('p', null, m.text),
+            React.createElement('div', { className: 'v5-time' }, m.time, skin === 'whatsapp' && React.createElement('span', { className: 'v5-ticks' }, ' ✓✓'))
+          )
+        );
+      }),
+      typing && React.createElement('div', { className: 'v5-msg-row skin-' + skin },
+        React.createElement('div', { className: 'v5-bubble' }, React.createElement('div', { className: 'v5-typing' }, React.createElement('span'), React.createElement('span'), React.createElement('span')))
+      )
+    ),
+    React.createElement(V5ChatInput, { skin: skin })
   );
 }
 
-function V5ChatHeader({ skin, typing }) {
-  if (skin === 'whatsapp') return (
-    <div className="v5-chat-header v5-h-wa">
-      <span className="v5-chat-back">‹</span>
-      <div className="v5-chat-av" style={{background:'#25D366'}}>n.</div>
-      <div className="v5-chat-h-meta"><strong>nVision · AI</strong><span>{typing ? 'כותב/ת…' : 'ערוץ · 12,847 עוקבים'}</span></div>
-      <div className="v5-chat-icons"><span>📷</span><span>⌕</span><span>⋮</span></div>
-    </div>
+function V5ChatHeader(_ref2) {
+  var skin = _ref2.skin, typing = _ref2.typing;
+  if (skin === 'whatsapp') return React.createElement('div', { className: 'v5-chat-header v5-h-wa' },
+    React.createElement('span', { className: 'v5-chat-back' }, '‹'),
+    React.createElement('div', { className: 'v5-chat-av', style: { background: '#25D366' } }, 'n.'),
+    React.createElement('div', { className: 'v5-chat-h-meta' },
+      React.createElement('strong', null, 'nVision · AI'),
+      React.createElement('span', null, typing ? 'כותב/ת…' : 'ערוץ · 12,847 עוקבים')
+    ),
+    React.createElement('div', { className: 'v5-chat-icons' },
+      React.createElement('span', null, '📷'),
+      React.createElement('span', null, '⌕'),
+      React.createElement('span', null, '⋮')
+    )
   );
-  if (skin === 'telegram') return (
-    <div className="v5-chat-header v5-h-tg">
-      <span className="v5-chat-back">‹</span>
-      <div className="v5-chat-av" style={{background:'linear-gradient(135deg,#54a9eb,#2A8AD8)'}}>n.</div>
-      <div className="v5-chat-h-meta"><strong>nVision · AI <span className="v5-tg-verified">✓</span></strong><span>{typing ? 'כותב/ת…' : '12,847 subscribers'}</span></div>
-      <div className="v5-chat-icons"><span>⌕</span><span>⋮</span></div>
-    </div>
+  if (skin === 'telegram') return React.createElement('div', { className: 'v5-chat-header v5-h-tg' },
+    React.createElement('span', { className: 'v5-chat-back' }, '‹'),
+    React.createElement('div', { className: 'v5-chat-av', style: { background: 'linear-gradient(135deg,#54a9eb,#2A8AD8)' } }, 'n.'),
+    React.createElement('div', { className: 'v5-chat-h-meta' },
+      React.createElement('strong', null, 'nVision · AI ', React.createElement('span', { className: 'v5-tg-verified' }, '✓')),
+      React.createElement('span', null, typing ? 'כותב/ת…' : '12,847 subscribers')
+    ),
+    React.createElement('div', { className: 'v5-chat-icons' },
+      React.createElement('span', null, '⌕'),
+      React.createElement('span', null, '⋮')
+    )
   );
-  return (
-    <div className="v5-chat-header v5-h-fb">
-      <span className="v5-chat-back">‹</span>
-      <div className="v5-chat-av" style={{background:'linear-gradient(135deg,#0099FF,#A033FF)'}}>n.</div>
-      <div className="v5-chat-h-meta"><strong>nVision · AI</strong><span>{typing ? 'מקליד/ה…' : 'פעיל/ה עכשיו'}</span></div>
-      <div className="v5-chat-icons"><span>📞</span><span>📹</span><span>ⓘ</span></div>
-    </div>
-  );
-}
-
-function V5ChatInput({ skin }) {
-  if (skin === 'whatsapp') return (
-    <div className="v5-chat-input v5-i-wa">
-      <span>😊</span><div className="v5-chat-fake-input">הקלד הודעה</div><span>📎</span><span>📷</span>
-      <button className="v5-chat-send" style={{background:'#25D366'}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12L19 12M19 12L13 6M19 12L13 18" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
-    </div>
-  );
-  if (skin === 'telegram') return (
-    <div className="v5-chat-input v5-i-tg"><span>😊</span><div className="v5-chat-fake-input">Message</div><span>📎</span><span style={{color:'#2AABEE',fontSize:18}}>🎤</span></div>
-  );
-  return (
-    <div className="v5-chat-input v5-i-fb">
-      <span style={{color:'#0084FF'}}>+</span><span style={{color:'#0084FF'}}>📷</span><span style={{color:'#0084FF'}}>🖼</span><span style={{color:'#0084FF'}}>🎤</span>
-      <div className="v5-chat-fake-input">Aa</div><span style={{color:'#0084FF',fontSize:18}}>👍</span>
-    </div>
+  return React.createElement('div', { className: 'v5-chat-header v5-h-fb' },
+    React.createElement('span', { className: 'v5-chat-back' }, '‹'),
+    React.createElement('div', { className: 'v5-chat-av', style: { background: 'linear-gradient(135deg,#0099FF,#A033FF)' } }, 'n.'),
+    React.createElement('div', { className: 'v5-chat-h-meta' },
+      React.createElement('strong', null, 'nVision · AI'),
+      React.createElement('span', null, typing ? 'מקליד/ה…' : 'פעיל/ה עכשיו')
+    ),
+    React.createElement('div', { className: 'v5-chat-icons' },
+      React.createElement('span', null, '📞'),
+      React.createElement('span', null, '📹'),
+      React.createElement('span', null, 'ⓘ')
+    )
   );
 }
 
-// ============== ARTICLE WALL — draggable accordion post-its ==============
+function V5ChatInput(_ref3) {
+  var skin = _ref3.skin;
+  if (skin === 'whatsapp') return React.createElement('div', { className: 'v5-chat-input v5-i-wa' },
+    React.createElement('span', null, '😊'),
+    React.createElement('div', { className: 'v5-chat-fake-input' }, 'הקלד הודעה'),
+    React.createElement('span', null, '📎'),
+    React.createElement('span', null, '📷'),
+    React.createElement('button', { className: 'v5-chat-send', style: { background: '#25D366' } },
+      React.createElement('svg', { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none' },
+        React.createElement('path', { d: 'M5 12L19 12M19 12L13 6M19 12L13 18', stroke: 'white', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      )
+    )
+  );
+  if (skin === 'telegram') return React.createElement('div', { className: 'v5-chat-input v5-i-tg' },
+    React.createElement('span', null, '😊'),
+    React.createElement('div', { className: 'v5-chat-fake-input' }, 'Message'),
+    React.createElement('span', null, '📎'),
+    React.createElement('span', { style: { color: '#2AABEE', fontSize: 18 } }, '🎤')
+  );
+  return React.createElement('div', { className: 'v5-chat-input v5-i-fb' },
+    React.createElement('span', { style: { color: '#0084FF' } }, '+'),
+    React.createElement('span', { style: { color: '#0084FF' } }, '📷'),
+    React.createElement('span', { style: { color: '#0084FF' } }, '🖼'),
+    React.createElement('span', { style: { color: '#0084FF' } }, '🎤'),
+    React.createElement('div', { className: 'v5-chat-fake-input' }, 'Aa'),
+    React.createElement('span', { style: { color: '#0084FF', fontSize: 18 } }, '👍')
+  );
+}
+
+function V5Sparkline(_ref4) {
+  var data = _ref4.data;
+  var w = 78, h = 30, pad = 2;
+  var max = Math.max.apply(null, data.concat([1]));
+  var step = (w - pad * 2) / (data.length - 1);
+  var pts = data.map(function(v, i) { return [pad + i * step, h - pad - (v / max) * (h - pad * 2)]; });
+  var line = pts.map(function(p) { return p.join(','); }).join(' ');
+  var area = pad + ',' + (h - pad) + ' ' + line + ' ' + (w - pad) + ',' + (h - pad);
+  var last = pts[pts.length - 1];
+  return React.createElement('svg', { className: 'v5-spark', viewBox: '0 0 ' + w + ' ' + h },
+    React.createElement('polygon', { className: 'area', points: area }),
+    React.createElement('polyline', { className: 'line', points: line }),
+    React.createElement('circle', { className: 'endpt', cx: last[0], cy: last[1], r: 2.4 })
+  );
+}
+
+// ============== NEWSROOM ==============
+
+function V5Newsroom() {
+  var _useState6 = useV5S('whatsapp');
+  var skin = _useState6[0], setSkin = _useState6[1];
+
+  return React.createElement('section', { id: 'news', className: 'v5-newsroom' },
+    React.createElement('div', { className: 'v5-newsroom-head' },
+      React.createElement('div', { className: 'v5-eyebrow' }, '[ §02 — NEWSROOM ]'),
+      React.createElement('h2', null, 'הניוזרום שלנו ', React.createElement('span', { className: 'serif' }, 'בכיס שלך.')),
+      React.createElement('p', null, 'וואטסאפ, טלגרם או מסנג׳ר — אותו תוכן, אפס פיד אינסופי. רק מה שצריך לדעת, מתי שצריך.')
+    ),
+    React.createElement('div', { className: 'v5-newsroom-grid' },
+      React.createElement('div', { className: 'v5-phone-col', 'data-v5-reveal': true, style: { '--ey': '40px' } },
+        React.createElement('div', { className: 'v5-skin-squares' },
+          [['whatsapp','#25D366','W','WhatsApp'],['telegram','#2AABEE','T','Telegram'],['messenger','#0084FF','M','Messenger']].map(function(s) {
+            return React.createElement('button', {
+              key: s[0],
+              className: 'v5-skin-sq ' + (skin === s[0] ? 'active' : '') + ' sq-' + s[0],
+              onClick: function() { return setSkin(s[0]); },
+              title: s[3]
+            }, React.createElement('span', { style: { background: s[1] } }, s[2]));
+          })
+        ),
+        React.createElement('div', { className: 'v5-phone' },
+          React.createElement('div', { className: 'v5-phone-notch' }),
+          React.createElement('div', { className: 'v5-phone-screen' },
+            React.createElement(V5Chat, { skin: skin })
+          )
+        )
+      ),
+      React.createElement('div', { className: 'v5-hot', 'data-v5-reveal': true, style: { '--ex': '30px' } },
+        React.createElement('div', { className: 'v5-hot-head' },
+          React.createElement('h3', null,
+            React.createElement('span', null,
+              React.createElement('small', null, 'HOT 06 · WEEKLY'),
+              ' הכי ',
+              React.createElement('span', { className: 'serif' }, 'חמים')
+            )
+          ),
+          React.createElement('div', { className: 'v5-hot-meta-bar' },
+            React.createElement('span', { className: 'mono' }, 'N°247'),
+            React.createElement('strong', null, '● LIVE')
+          )
+        ),
+        React.createElement('div', { className: 'v5-hot-list' },
+          V5_HOT.map(function(row) {
+            return React.createElement('a', {
+              key: row.rank,
+              href: V5_LINKS.articleDemo,
+              className: 'v5-hot-row ' + (row.rank <= 2 ? 'is-fire' : '') + ' ' + (row.dir === 'dn' ? 'dn' : ''),
+              'cat-' + row.cat.split(' ')[0]
+            },
+              React.createElement('span', { className: 'v5-hot-rk' }, String(row.rank).padStart(2, '0')),
+              React.createElement('div', { className: 'v5-hot-mid' },
+                React.createElement('div', { className: 'v5-hot-meta' },
+                  React.createElement('span', { className: 'v5-hot-cat' }, row.cat),
+                  React.createElement('span', { className: 'v5-hot-tool' }, row.tool)
+                ),
+                React.createElement('strong', null, row.title)
+              ),
+              React.createElement(V5Sparkline, { data: row.spark }),
+              React.createElement('div', { className: 'v5-hot-side' },
+                React.createElement('span', { className: 'score' }, row.score + 'K'),
+                React.createElement('span', { className: 'delta ' + (row.dir === 'dn' ? 'dn' : row.dir === 'new' ? 'new' : '') }, row.delta)
+              )
+            );
+          })
+        ),
+        React.createElement('div', { className: 'v5-hot-foot' },
+          React.createElement('span', { className: 'live' }, 'UPDATED 14:32'),
+          React.createElement('a', { href: V5_LINKS.articles }, 'כל הדירוג ↗')
+        )
+      )
+    )
+  );
+}
+
+// ============== ARTICLE WALL ==============
+
 function V5ArticleWall() {
-  const [filter, setFilter] = useV5S('ALL');
-  const cats = ['ALL', 'OPINION', 'GUIDE', 'TOOLS', 'DEEP DIVE', 'BENCH'];
-  const filtered = filter === 'ALL' ? V5_ARTICLES : V5_ARTICLES.filter(a => a.cat === filter);
+  var _useState7 = useV5S('ALL');
+  var filter = _useState7[0], setFilter = _useState7[1];
+  var cats = ['ALL', 'OPINION', 'GUIDE', 'TOOLS', 'DEEP DIVE', 'BENCH'];
+  var filtered = filter === 'ALL' ? V5_ARTICLES : V5_ARTICLES.filter(function(a) { return a.cat === filter; });
 
-  const positions = V5_POS;
-
-  return (
-    <section id="tools" className="v5-wall">
-      <div className="v5-sec-head">
-        <div className="v5-eyebrow">[ §03 — THE WALL ]</div>
-        <h2>קיר <span className="serif">המאמרים.</span></h2>
-        <p className="v5-sec-p">גרור. לחץ. תפתח. תקרא. <em>כל פתק חי משלו.</em></p>
-        <div className="v5-wall-filters">
-          {cats.map(c => (
-            <button key={c} className={`v5-wf ${filter===c?'active':''}`} onClick={() => setFilter(c)}>{c}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className="v5-wall-stage">
-        {V5_ARTICLES.map((a, i) => {
-          const visible = filter === 'ALL' || a.cat === filter;
-          return <V5ArticlePostit key={a.id} a={a} pos={positions[i]} visible={visible}/>;
-        })}
-      </div>
-    </section>
+  return React.createElement('section', { id: 'tools', className: 'v5-wall' },
+    React.createElement('div', { className: 'v5-sec-head' },
+      React.createElement('div', { className: 'v5-eyebrow' }, '[ §03 — THE WALL ]'),
+      React.createElement('h2', null, 'קיר ', React.createElement('span', { className: 'serif' }, 'המאמרים.')),
+      React.createElement('p', { className: 'v5-sec-p' }, 'גרור. לחץ. תפתח. תקרא. ', React.createElement('em', null, 'כל פתק חי משלו.')),
+      React.createElement('div', { className: 'v5-wall-filters' },
+        cats.map(function(c) {
+          return React.createElement('button', {
+            key: c,
+            className: 'v5-wf ' + (filter === c ? 'active' : ''),
+            onClick: function() { return setFilter(c); }
+          }, c);
+        })
+      )
+    ),
+    React.createElement('div', { className: 'v5-wall-stage' },
+      V5_ARTICLES.map(function(a, i) {
+        var visible = filter === 'ALL' || a.cat === filter;
+        return React.createElement(V5ArticlePostit, { key: a.id, a: a, pos: V5_POS[i], visible: visible });
+      })
+    )
   );
 }
 
-function V5ArticlePostit({ a, pos, visible }) {
-  const ref = useV5Drag();
-  const [open, setOpen] = useV5S(false);
-  return (
-    <article
-      ref={ref}
-      className={`v5-pn v5-pn-${a.color} ${open?'is-open':''} ${visible?'':'is-hidden'}`}
-      style={{
-        left: pos.left, top: pos.top,
-        transform: `translate3d(var(--dx,0), var(--dy,0), 0) rotate(${pos.rot}deg)`,
-      }}
-    >
-      <span className="v5-pn-pin"></span>
-      <div className="v5-pn-meta">
-        <span className="v5-pn-cat mono">{a.cat}</span>
-        <span className="v5-pn-tag">{a.tag}</span>
-      </div>
-      <h4>{a.title}</h4>
-      <div className="v5-pn-body">
-        <p>{a.body}</p>
-        <a className="v5-pn-link" href={V5_LINKS.articleDemo} data-no-drag>קרא את המאמר ↗</a>
-      </div>
-      <div className="v5-pn-foot">
-        <span className="mono">{a.author}</span>
-        <button className="v5-pn-toggle" data-no-drag onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o);}}>
-          {open ? '— סגור' : '+ פתח'}
-        </button>
-        <span className="mono">{a.read}</span>
-      </div>
-    </article>
+function V5ArticlePostit(_ref5) {
+  var a = _ref5.a, pos = _ref5.pos, visible = _ref5.visible;
+  var ref = useV5Drag();
+  var _useState8 = useV5S(false);
+  var open = _useState8[0], setOpen = _useState8[1];
+
+  return React.createElement('article', {
+    ref: ref,
+    className: 'v5-pn v5-pn-' + a.color + ' ' + (open ? 'is-open' : '') + ' ' + (visible ? '' : 'is-hidden'),
+    style: {
+      left: pos.left, top: pos.top,
+      transform: 'translate3d(var(--dx,0), var(--dy,0), 0) rotate(' + pos.rot + 'deg)'
+    }
+  },
+    React.createElement('span', { className: 'v5-pn-pin' }),
+    React.createElement('div', { className: 'v5-pn-meta' },
+      React.createElement('span', { className: 'v5-pn-cat mono' }, a.cat),
+      React.createElement('span', { className: 'v5-pn-tag' }, a.tag)
+    ),
+    React.createElement('h4', null, a.title),
+    React.createElement('div', { className: 'v5-pn-body' },
+      React.createElement('p', null, a.body),
+      React.createElement('a', { className: 'v5-pn-link', href: V5_LINKS.articleDemo, 'data-no-drag': true }, 'קרא את המאמר ↗')
+    ),
+    React.createElement('div', { className: 'v5-pn-foot' },
+      React.createElement('span', { className: 'mono' }, a.author),
+      React.createElement('button', { className: 'v5-pn-toggle', 'data-no-drag': true, onClick: function(e) { e.stopPropagation(); setOpen(function(o) { return !o; }); } },
+        open ? '— סגור' : '+ פתח'
+      ),
+      React.createElement('span', { className: 'mono' }, a.read)
+    )
   );
 }
 
-// ============== CATEGORY PAGE — magazine library template ==============
-function V5ArticleKind(a) {
-  return V5_KIND_MAP[a.cat] || 'מאמר';
-}
+// ============== ARTICLE TEMPLATE (Demo / New) ==============
 
-function V5CategoryPage() {
-  const [filter, setFilter] = useV5S('הכל');
-  const visible = filter === 'הכל' ? V5_ARTICLES : V5_ARTICLES.filter(a => V5ArticleKind(a) === filter);
-  const hero = visible[0] || V5_ARTICLES[0];
-
-  return (
-    <section id="articles" className="v5-category">
-      <div className="v5-cat-bg-word">LIBRARY</div>
-      <div className="v5-cat-head" data-v5-reveal>
-        <div>
-          <div className="v5-eyebrow">[ §04 — ARTICLE LIBRARY ]</div>
-          <h2>דף קטגוריה <span className="serif">למאמרים שחיים על הקיר.</span></h2>
-        </div>
-        <p>
-          מדריכים, מאמרים, השוואות וסקירות. במקום עוד גריד משעמם, הספרייה עובדת כמו שולחן מערכת:
-          פתקים, מסלולי קריאה, דירוגים קטנים, וקצת בלגן שמכריח את העין לטייל.
-        </p>
-      </div>
-
-      <div className="v5-cat-controls" data-v5-reveal>
-        {V5_CATEGORY_FILTERS.map(f => (
-          <button key={f} className={`v5-cat-filter ${filter===f?'active':''}`} onClick={() => setFilter(f)}>
-            <span>{f}</span>
-            <em>{f === 'הכל' ? V5_ARTICLES.length : V5_ARTICLES.filter(a => V5ArticleKind(a) === f).length}</em>
-          </button>
-        ))}
-        <a className="v5-cat-filter v5-cat-filter-cta" href={V5_LINKS.article}>
-          <span>מאמר חדש</span>
-          <em>open</em>
-        </a>
-      </div>
-
-      <div className="v5-cat-layout">
-        <article className={`v5-cat-feature v5-pn-${hero.color}`} data-v5-reveal style={{'--ey':'42px'}}>
-          <span className="v5-cat-stamp">EDITOR PICK</span>
-          <div className="v5-cat-feature-art">
-            <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice">
-              <rect width="640" height="360" fill="currentColor" opacity="0.08"/>
-              <g fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M70 250 C140 120 220 280 310 150 S500 90 570 240" strokeDasharray="8 10"/>
-                <path d="M80 110 L230 70 L340 170 L500 105" />
-                <rect x="74" y="74" width="120" height="82" rx="10"/>
-                <rect x="370" y="190" width="150" height="96" rx="12"/>
-                <circle cx="275" cy="210" r="54"/>
-              </g>
-              <text x="42" y="318" fontFamily="Instrument Serif" fontStyle="italic" fontSize="62" fill="currentColor">vibe field notes.</text>
-            </svg>
-          </div>
-          <div className="v5-cat-feature-copy">
-            <div className="v5-cardline">
-              <span>{V5ArticleKind(hero)}</span>
-              <span>{hero.read}</span>
-              <span>{hero.author}</span>
-            </div>
-            <h3>{hero.title}</h3>
-            <p>{hero.body}</p>
-            <a href={V5_LINKS.article}>פתח טמפלט מאמר ↙</a>
-          </div>
-        </article>
-
-        <aside className="v5-cat-side" data-v5-reveal style={{'--ex':'-24px'}}>
-          <h3><span className="serif">מסלולי</span> קריאה</h3>
-          <a className="v5-path v5-path-sage v5-path-hero" href={V5_LINKS.article}>
-            <span className="mono">FEATURED · NEW</span>
-            <strong>לפתוח מאמר חדש</strong>
-            <em>העמוד הייעודי שמדגים איך נראה מאמר אמיתי באופציה E.</em>
-          </a>
-          {V5_PATHS.map((path, i) => (
-            <a key={path.label} href={V5_LINKS.article} className={`v5-path v5-path-${path.tone}`} style={{'--rot': `${i % 2 ? -1.6 : 1.4}deg`}}>
-              <span className="mono">TRACK {String(i+1).padStart(2,'0')} · {path.count}</span>
-              <strong>{path.label}</strong>
-              <em>{path.title}</em>
-            </a>
-          ))}
-        </aside>
-
-        <div className="v5-cat-grid">
-          {visible.map((a, i) => (
-            <article key={a.id} className={`v5-cat-card v5-cat-card-${a.color}`} data-v5-reveal style={{'--delay': `${i * 0.04}s`}}>
-              <div className="v5-cardline">
-                <span>{V5ArticleKind(a)}</span>
-                <span>{a.cat}</span>
-              </div>
-              <h3>{a.title}</h3>
-              <p>{a.body}</p>
-              <div className="v5-cat-card-foot">
-                <span className="mono">{a.author}</span>
-                <span className="mono">{a.read}</span>
-                <a href={V5_LINKS.articleDemo}>↙</a>
-              </div>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ============== ARTICLE TEMPLATE — longform page mock ==============
-function V5ArticleTemplate({ mode = 'new' }) {
-  const isDemo = mode === 'demo';
-  const outline = isDemo ? V5_ARTICLE_OUTLINE : V5_TEMPLATE_OUTLINE;
-  const related = isDemo
-    ? V5_RELATED.map((item) => ({ ...item, href: V5_LINKS.articles }))
+function V5ArticleTemplate(_ref6) {
+  var mode = _ref6.mode;
+  var isDemo = mode === 'demo';
+  var outline = isDemo ? V5_ARTICLE_OUTLINE : V5_TEMPLATE_OUTLINE;
+  var related = isDemo
+    ? V5_RELATED.map(function(item) { return Object.assign({}, item, { href: V5_LINKS.articles }); })
     : V5_TEMPLATE_RELATED;
 
-  return (
-    <section id="guides" className="v5-article-template">
-      <div className="v5-article-paper"></div>
-      <div className="v5-article-top" data-v5-reveal>
-        <div className="v5-article-labels">
-          <span>{isDemo ? '§05 - DEMO ARTICLE' : '§05 - NEW ARTICLE TEMPLATE'}</span>
-          <span>{isDemo ? 'מדריך / מאמר / השוואה' : 'טמפלט למדריך / מאמר / השוואה'}</span>
-          <span>{isDemo ? 'RTL READY' : 'READY TO FILL'}</span>
-        </div>
-        <h2>
-          {isDemo ? 'בונים סוכן AI ב-Cursor:' : 'כאן נכנסת הכותרת.'}
-          <span className="serif">{isDemo ? ' מהפתק הראשון לפרודקשן.' : ' כאן נבנה ההוק של המאמר.'}</span>
-        </h2>
-        <p>
-          {isDemo
-            ? 'זה עמוד דוגמה מלא כדי לראות איך מאמר נראה באופציה E: עם היררכיה, ויזואל, TL;DR, ציטוט, קוד וקישורי המשך.'
-            : 'זה עמוד הטמפלט שפותחים כשמתחילים מאמר חדש. המבנה, הקצב והאווירה כבר בפנים; עכשיו אפשר לצקת לתוכם את הסיפור עצמו.'}
-          <span className="v5-article-links">
-            <a href={V5_LINKS.articles}>חזרה לספריית המאמרים</a>
-            <a href={isDemo ? V5_LINKS.article : V5_LINKS.articleDemo}>{isDemo ? 'פתח מאמר חדש' : 'ראה מאמר דוגמה מלא'}</a>
-          </span>
-        </p>
-      </div>
-
-      <div className="v5-article-shell">
-        <aside className="v5-article-rail" data-v5-reveal style={{ '--ex': '26px' }}>
-          <div className="v5-rail-card">
-            <strong>TL;DR</strong>
-            <p>{isDemo ? 'Cursor + MCP + מודל טוב הם לא מוצר. צריך גבולות, בדיקות, לוגים ו-rollback.' : 'כאן מכניסים ב-2 או 3 שורות את ה-takeaway של המאמר, כדי שגם סריקה מהירה תעבוד.'}</p>
-          </div>
-          <div className="v5-rail-card v5-rail-dark">
-            <span className="mono">READING MAP</span>
-            {outline.map((item, i) => (
-              <a key={item.id} href={`#${item.id}`}><em>{String(i + 1).padStart(2, '0')}</em>{item.title}</a>
-            ))}
-          </div>
-          <div className="v5-rail-note">{isDemo ? 'לא עוד "AI יעשה הכל". יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.' : 'טיפ: אם הפתיחה לא מייצרת סקרנות תוך 3 שורות, הקורא כבר בדרך החוצה.'}</div>
-        </aside>
-
-        <article className="v5-longform" data-v5-reveal>
-          <div className="v5-longform-meta">
-            <span>{isDemo ? 'מדריך' : 'סוג מאמר'}</span>
-            <span>{isDemo ? '09.05.2026' : 'DD.MM.YYYY'}</span>
-            <span>{isDemo ? 'יואב לוי' : 'AUTHOR NAME'}</span>
-            <span>{isDemo ? '11 דק׳' : 'X דק׳ קריאה'}</span>
-          </div>
-
-          <div className="v5-longform-hero">
-            <V5ArticleVisual />
-          </div>
-
-          <p id="article-intro" className="lead">
-            {isDemo
-              ? 'כל שבוע נולד כלי חדש שמבטיח אפליקציה בפרומפט אחד. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.'
-              : 'כאן נכנס הפתיח הראשי של המאמר. הוא אמור להסביר מה הבעיה, למה דווקא עכשיו, ומה בדיוק הקורא ירוויח אם יישאר עד הסוף.'}
-          </p>
-
-          <h3 id="article-stack">{isDemo ? '1. מתחילים מבעיה קטנה, לא מסוכן כל-יכול' : '1. פרק ראשון: ממסגרים את הבעיה'}</h3>
-          <p>
-            {isDemo
-              ? 'הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה: סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.'
-              : 'בפרק הזה מגדירים את החיכוך, הקונטקסט והסיבה לכתיבת המאמר. זה המקום להכניס דוגמה קצרה, נתון מעניין או סצנה שמכניסה את הקורא פנימה.'}
-          </p>
-
-          <blockquote>
-            {isDemo ? '"וייב קודינג טוב הוא לא לוותר על ארכיטקטורה. הוא להזיז אותה קדימה מהר יותר."' : '"כאן נכנס משפט מפתח, ציטוט או takeaway חד שמייצר עצירה קטנה באמצע הקריאה."'}
-          </blockquote>
-
-          <div className="v5-method-card">
-            <span className="mono">{isDemo ? 'PROMPT CONTRACT' : 'ARTICLE BLUEPRINT'}</span>
-            <code>{isDemo ? `role: senior implementation agent
-input: issue + repo context
-rules: ask only when blocked
-output: patch + tests + risks` : `headline:
-subheadline:
-reader:
-promise:
-sections:
-  - hook
-  - context
-  - main insight
-  - examples / comparison
-  - conclusion
-cta:`}</code>
-          </div>
-
-          <h3 id="article-risks">{isDemo ? '2. בונים שלוש שכבות: מודל, כלים, שמירה' : '2. פרק שני: הגוף הראשי של המאמר'}</h3>
-          <p>
-            {isDemo
-              ? 'למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו. זה המקום שבו MCP, הרשאות, בדיקות ו-CI הופכים מאביזרים ל-infrastructure.'
-              : 'כאן נכנס עומק אמיתי: השוואות, צעדים, תובנות, פירוקים, תמונות מסך, קטעי קוד או prompts. זה החלק שבו המאמר מפסיק להיות רק כותרת טובה ומתחיל להיות שימושי.'}
-          </p>
-
-          <div className="v5-compare-strip">
-            {isDemo ? (
-              <>
-                <div><span>דמו</span><strong>prompt → wow</strong><em>מהיר, שביר</em></div>
-                <div><span>מוצר</span><strong>context → tools → tests</strong><em>איטי יותר, אמיתי</em></div>
-                <div><span>צוות</span><strong>agent → review → ship</strong><em>הקצב הנכון</em></div>
-              </>
-            ) : (
-              <>
-                <div><span>HOOK</span><strong>title → promise</strong><em>מה הקורא יקבל</em></div>
-                <div><span>BODY</span><strong>insight → example → proof</strong><em>העומק שגורם להישאר</em></div>
-                <div><span>END</span><strong>takeaway → action</strong><em>מה לוקחים הלאה</em></div>
-              </>
-            )}
-          </div>
-
-          <h3 id="article-ship">{isDemo ? '3. משחררים רק אחרי שיש דרך לדעת שנשבר' : '3. פרק סיום: סגירה, takeaway, CTA'}</h3>
-          <p>
-            {isDemo
-              ? 'אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת עוזר או רק עושה רעש יפה.'
-              : 'הסוף אמור לסגור את הטענה, לחבר את כל החלקים, ולהשאיר את הקורא עם צעד הבא ברור: מה לבדוק, מה לנסות, או לאן להמשיך מכאן.'}
-          </p>
-        </article>
-
-        <aside className="v5-related" data-v5-reveal style={{ '--ex': '-26px' }}>
-          <h3>{isDemo ? 'המשך קריאה' : 'קיצורי דרך'}</h3>
-          {related.map((item) => (
-            <a key={item.title} href={item.href}>
-              <strong>{item.title}</strong>
-              <span className="mono">{item.meta}</span>
-            </a>
-          ))}
-        </aside>
-      </div>
-    </section>
+  return React.createElement('section', { id: 'guides', className: 'v5-article-template' },
+    React.createElement('div', { className: 'v5-article-paper' }),
+    React.createElement('div', { className: 'v5-article-top', 'data-v5-reveal': true },
+      React.createElement('div', { className: 'v5-article-labels' },
+        React.createElement('span', null, isDemo ? '§05 - DEMO ARTICLE' : '§05 - NEW ARTICLE TEMPLATE'),
+        React.createElement('span', null, isDemo ? 'מדריך / מאמר / השוואה' : 'טמפלט למדריך / מאמר / השוואה'),
+        React.createElement('span', null, isDemo ? 'RTL READY' : 'READY TO FILL')
+      ),
+      React.createElement('h2', null,
+        isDemo ? 'בונים סוכן AI ב-Cursor:' : 'כאן נכנסת הכותרת.',
+        React.createElement('span', { className: 'serif' }, isDemo ? ' מהפתק הראשון לפרודקשן.' : ' כאן נבנה ההוק של המאמר.')
+      ),
+      React.createElement('p', null,
+        isDemo
+          ? 'זה עמוד דוגמה מלא כדי לראות איך מאמר נראה באופציה E: עם היררכיה, ויזואל, TL;DR, ציטוט, קוד וקישורי המשך.'
+          : 'זה עמוד הטמפלט שפותחים כשמתחילים מאמר חדש. המבנה, הקצב והאווירה כבר בפנים; עכשיו אפשר לצקת לתוכם את הסיפור עצמו.',
+        React.createElement('span', { className: 'v5-article-links' },
+          React.createElement('a', { href: V5_LINKS.articles }, 'חזרה לספריית המאמרים'),
+          React.createElement('a', { href: isDemo ? V5_LINKS.article : V5_LINKS.articleDemo },
+            isDemo ? 'פתח מאמר חדש' : 'ראה מאמר דוגמה מלא'
+          )
+        )
+      )
+    ),
+    React.createElement('div', { className: 'v5-article-shell' },
+      React.createElement('aside', { className: 'v5-article-rail', 'data-v5-reveal': true, style: { '--ex': '26px' } },
+        React.createElement('div', { className: 'v5-rail-card' },
+          React.createElement('strong', null, 'TL;DR'),
+          React.createElement('p', null,
+            isDemo
+              ? 'Cursor + MCP + מודל טוב הם לא מוצר. צריך גבולות, בדיקות, לוגים ו-rollback.'
+              : 'כאן מכניסים ב-2 או 3 שורות את ה-takeaway של המאמר, כדי שגם סריקה מהירה תעבוד.'
+          )
+        ),
+        React.createElement('div', { className: 'v5-rail-card v5-rail-dark' },
+          React.createElement('span', { className: 'mono' }, 'READING MAP'),
+          outline.map(function(item) {
+            return React.createElement('a', { key: item.id, href: '#' + item.id },
+              React.createElement('em', null, String(outline.indexOf(item) + 1).padStart(2, '0')),
+              item.title
+            );
+          })
+        ),
+        React.createElement('div', { className: 'v5-rail-note' },
+          isDemo
+            ? 'לא עוד "AI יעשה הכל". יותר כמו: AI יעשה הרבה, ואתה תהיה המבוגר האחראי בחדר.'
+            : 'טיפ: אם הפתיחה לא מייצרת סקרנות תוך 3 שורות, הקורא כבר בדרך החוצה.'
+        )
+      ),
+      React.createElement('article', { className: 'v5-longform', 'data-v5-reveal': true },
+        React.createElement('div', { className: 'v5-longform-meta' },
+          React.createElement('span', null, isDemo ? 'מדריך' : 'סוג מאמר'),
+          React.createElement('span', null, isDemo ? '09.05.2026' : 'DD.MM.YYYY'),
+          React.createElement('span', null, isDemo ? 'יואב לוי' : 'AUTHOR NAME'),
+          React.createElement('span', null, isDemo ? '11 דק׳' : 'X דק׳ קריאה')
+        ),
+        React.createElement('div', { className: 'v5-longform-hero' },
+          React.createElement(V5ArticleVisual)
+        ),
+        React.createElement('p', { id: 'article-intro', className: 'lead' },
+          isDemo
+            ? 'כל שבוע נולד כלי חדש שמבטיח אפליקציה בפרומפט אחד. בפועל, ההבדל בין דמו יפה לבין מוצר שאפשר לסמוך עליו הוא לא הקסם של המודל, אלא השיטה שמקיפה אותו.'
+            : 'כאן נכנס הפתיח הראשון של המאמר. הוא אמור להסביר מה הבעיה, למה דווקא עכשיו, ומה בדיוק הקורא ירוויח אם יישאר עד הסוף.'
+        ),
+        React.createElement('h3', { id: 'article-stack' },
+          isDemo ? '1. מתחילים מבעיה קטנה, לא מסוכן כל-יכול' : '1. פרק ראשון: ממסגרים את הבעיה'
+        ),
+        React.createElement('p', null,
+          isDemo
+            ? 'הטעות הקלאסית היא לבנות סוכן שמנהל את כל החיים. במקום זה, בוחרים פעולה אחת שחוזרת על עצמה: סיכום PR, יצירת טיוטת מסמך, בדיקת issue, או בניית קומפוננטה מתוך brief.'
+            : 'בפרק הזה מגדירים את החיכוך, הקונטקסט והסיבה לכתיבת המאמר. זה המקום להכניס דוגמה קצרה, נתון מעניין או סצנה שמכניסה את הקורא פנימה.'
+        ),
+        React.createElement('blockquote', null,
+          isDemo
+            ? '"וייב קודינג טוב הוא לא לוותר על ארכיטקטורה. הוא להזיז אותה קדימה מהר יותר."'
+            : '"כאן נכנס משפט מפתח, ציטוט או takeaway חד שמייצר עצירה קטנה באמצע הקריאה."'
+        ),
+        React.createElement('div', { className: 'v5-method-card' },
+          React.createElement('span', { className: 'mono' }, isDemo ? 'PROMPT CONTRACT' : 'ARTICLE BLUEPRINT'),
+          React.createElement('code', null, isDemo ? "role: senior implementation agent\ninput: issue + repo context\nrules: ask only when blocked\noutput: patch + tests + risks" : "headline:\nsubheadline:\nreader:\npromise:\nsections:\n  - hook\n  - context\n  - main insight\n  - examples / comparison\n  - conclusion\ncta:")
+        ),
+        React.createElement('h3', { id: 'article-risks' },
+          isDemo ? '2. בונים שלוש שכבות: מודל, כלים, שמירה' : '2. פרק שני: הגוף הראשי של המאמר'
+        ),
+        React.createElement('p', null,
+          isDemo
+            ? 'למודל נותנים יכולת לחשוב, לכלים נותנים יכולת לבצע, ולשכבת השמירה נותנים את הכוח לעצור אותו. זה המקום שבו MCP, הרשאות, בדיקות ו-CI הופכים מאביזרים ל-infrastructure.'
+            : 'כאן נכנס עומק אמיתי: השוואות, צעדים, תובנות, פירוקים, תמונות מסך, קטעי קוד או prompts. זה החלק שבו המאמר מפסיק להיות רק כותרת טובה ומתחיל להיות שימושי.'
+        ),
+        React.createElement('div', { className: 'v5-compare-strip' },
+          isDemo ? (
+            React.createElement(React.Fragment, null,
+              React.createElement('div', null,
+                React.createElement('span', null, 'דמו'),
+                React.createElement('strong', null, 'prompt → wow'),
+                React.createElement('em', null, 'מהיר, שביר')
+              ),
+              React.createElement('div', null,
+                React.createElement('span', null, 'מוצר'),
+                React.createElement('strong', null, 'context → tools → tests'),
+                React.createElement('em', null, 'איטי יותר, אמיתי')
+              ),
+              React.createElement('div', null,
+                React.createElement('span', null, 'צוות'),
+                React.createElement('strong', null, 'agent → review → ship'),
+                React.createElement('em', null, 'הקצב הנכון')
+              )
+            )
+          ) : (
+            React.createElement(React.Fragment, null,
+              React.createElement('div', null,
+                React.createElement('span', null, 'HOOK'),
+                React.createElement('strong', null, 'title → promise'),
+                React.createElement('em', null, 'מה הקורא יקבל')
+              ),
+              React.createElement('div', null,
+                React.createElement('span', null, 'BODY'),
+                React.createElement('strong', null, 'insight → example → proof'),
+                React.createElement('em', null, 'העומק שגורם להישאר')
+              ),
+              React.createElement('div', null,
+                React.createElement('span', null, 'END'),
+                React.createElement('strong', null, 'takeaway → action'),
+                React.createElement('em', null, 'מה לוקחים הלאה')
+              )
+            )
+          )
+        ),
+        React.createElement('h3', { id: 'article-ship' },
+          isDemo ? '3. משחררים רק אחרי שיש דרך לדעת שנשבר' : '3. פרק סיום: סגירה, takeaway, CTA'
+        ),
+        React.createElement('p', null,
+          isDemo
+            ? 'אם אין לוגים, אין מוצר. אם אין rollback, אין אומץ לשחרר. ואם אין מדד הצלחה אחד, אין דרך לדעת אם הסוכן באמת עוזר או רק עושה רעש יפה.'
+            : 'הסוף אמור לסגור את הטענה, לחבר את כל החלקים, ולהשאיר את הקורא עם צעד הבא ברור: מה לבדוק, מה לנסות, או לאן להמשיך מכאן.'
+        )
+      ),
+      React.createElement('aside', { className: 'v5-related', 'data-v5-reveal': true, style: { '--ex': '-26px' } },
+        React.createElement('h3', null, isDemo ? 'המשך קריאה' : 'קיצורי דרך'),
+        related.map(function(item) {
+          return React.createElement('a', { key: item.title, href: item.href },
+            React.createElement('strong', null, item.title),
+            React.createElement('span', { className: 'mono' }, item.meta)
+          );
+        })
+      )
+    )
   );
 }
+
 function V5ArticleVisual() {
-  return (
-    <svg viewBox="0 0 920 430" preserveAspectRatio="xMidYMid slice">
-      <rect width="920" height="430" fill="#11110d"/>
-      <g opacity="0.23" stroke="#f4f0e8">
-        {[...Array(16)].map((_, i) => <line key={'h'+i} x1="0" y1={i*32} x2="920" y2={i*32}/>)}
-        {[...Array(28)].map((_, i) => <line key={'v'+i} x1={i*36} y1="0" x2={i*36} y2="430"/>)}
-      </g>
-      <g transform="translate(120 78)">
-        <rect x="0" y="0" width="260" height="170" rx="18" fill="#88a884"/>
-        <text x="28" y="62" fontFamily="JetBrains Mono" fontSize="24" fontWeight="700" fill="#11110d">{'{issue}'}</text>
-        <text x="28" y="108" fontFamily="Heebo" fontSize="34" fontWeight="900" fill="#11110d">בעיה קטנה</text>
-      </g>
-      <path d="M392 160 C482 80 520 270 620 170" stroke="#7da4be" strokeWidth="8" fill="none" strokeLinecap="round"/>
-      <g transform="translate(610 132) rotate(-4)">
-        <rect x="0" y="0" width="210" height="140" rx="18" fill="#c0d8e8"/>
-        <text x="26" y="58" fontFamily="Instrument Serif" fontStyle="italic" fontSize="52" fill="#11110d">agent.</text>
-        <text x="28" y="98" fontFamily="JetBrains Mono" fontSize="14" fill="#11110d">tools + tests</text>
-      </g>
-      <circle cx="500" cy="330" r="54" fill="#b89cc4"/>
-      <text x="500" y="340" textAnchor="middle" fontFamily="JetBrains Mono" fontSize="18" fontWeight="700" fill="#11110d">SHIP</text>
-      <text x="52" y="376" fontFamily="Instrument Serif" fontStyle="italic" fontSize="74" fill="#f4f0e8">from chaos to production.</text>
-    </svg>
+  return React.createElement('svg', { viewBox: '0 0 920 430', preserveAspectRatio: 'xMidYMid slice' },
+    React.createElement('rect', { width: 920, height: 430, fill: '#11110d' }),
+    React.createElement('g', { opacity: 0.23, stroke: '#f4f0e8' },
+      Array.from({ length: 16 }, function(_, i) { return React.createElement('line', { key: 'h' + i, x1: 0, y1: i * 32, x2: 920, y2: i * 32 }); }),
+      Array.from({ length: 28 }, function(_, i) { return React.createElement('line', { key: 'v' + i, x1: i * 36, y1: 0, x2: i * 36, y2: 430 }); })
+    ),
+    React.createElement('g', { transform: 'translate(120 78)' },
+      React.createElement('rect', { x: 0, y: 0, width: 260, height: 170, rx: 18, fill: '#88a884' }),
+      React.createElement('text', { x: 28, y: 62, fontFamily: 'JetBrains Mono', fontSize: 24, fontWeight: 700, fill: '#11110d' }, '{issue}'),
+      React.createElement('text', { x: 28, y: 108, fontFamily: 'Heebo', fontSize: 34, fontWeight: 900, fill: '#11110d', dir: 'rtl' }, 'בעיה קטנה')
+    ),
+    React.createElement('path', { d: 'M392 160 C482 80 520 270 620 170', stroke: '#7da4be', strokeWidth: 8, fill: 'none', strokeLinecap: 'round' }),
+    React.createElement('g', { transform: 'translate(610 132) rotate(-4)' },
+      React.createElement('rect', { x: 0, y: 0, width: 210, height: 140, rx: 18, fill: '#c0d8e8' }),
+      React.createElement('text', { x: 26, y: 58, fontFamily: 'Instrument Serif', fontStyle: 'italic', fontSize: 52, fill: '#11110d' }, 'agent.'),
+      React.createElement('text', { x: 28, y: 98, fontFamily: 'JetBrains Mono', fontSize: 14, fill: '#11110d' }, 'tools + tests')
+    ),
+    React.createElement('circle', { cx: 500, cy: 330, r: 54, fill: '#b89cc4' }),
+    React.createElement('text', { x: 500, y: 340, textAnchor: 'middle', fontFamily: 'JetBrains Mono', fontSize: 18, fontWeight: 700, fill: '#11110d' }, 'SHIP'),
+    React.createElement('text', { x: 52, y: 376, fontFamily: 'Instrument Serif', fontStyle: 'italic', fontSize: 74, fill: '#f4f0e8', dir: 'rtl' }, 'from chaos to production.')
   );
 }
 
-// ============== INFINITY CANVAS — 3 streams ==============
+// ============== INFINITY CANVAS ==============
+
 function V5Canvas() {
-  return (
-    <section className="v5-canvas">
-      <div className="v5-canvas-head">
-        <div className="v5-eyebrow">[ §06 — INFINITY ]</div>
-        <h2>הכל זורם. <span className="serif">לכל הכיוונים.</span></h2>
-      </div>
-      <div className="v5-streams">
-        <V5Stream items={V5_CATS.map(c => ({ kind:'cat', ...c }))} dir="ltr" speed="60s" tone="cat"/>
-        <V5Stream items={V5_ARTICLES.map(a => ({ kind:'art', ...a }))} dir="rtl" speed="80s" tone="art"/>
-        <V5Stream items={V5_QUOTES.map((q, i) => ({ kind:'q', q, i }))} dir="ltr" speed="100s" tone="q"/>
-      </div>
-    </section>
+  return React.createElement('section', { className: 'v5-canvas' },
+    React.createElement('div', { className: 'v5-canvas-head' },
+      React.createElement('div', { className: 'v5-eyebrow' }, '[ §06 — INFINITY ]'),
+      React.createElement('h2', null, 'הכל זורם. ', React.createElement('span', { className: 'serif' }, 'לכל הכיוונים.'))
+    ),
+    React.createElement('div', { className: 'v5-streams' },
+      React.createElement(V5Stream, { items: V5_CATS.map(function(c) { return { kind: 'cat' }.concat(c); }), dir: 'ltr', speed: '60s', tone: 'cat' }),
+      React.createElement(V5Stream, { items: V5_ARTICLES.map(function(a) { return { kind: 'art' }.concat(a); }), dir: 'rtl', speed: '80s', tone: 'art' }),
+      React.createElement(V5Stream, { items: V5_QUOTES.map(function(q, i) { return { kind: 'q', q: q, i: i }; }), dir: 'ltr', speed: '100s', tone: 'q' })
+    )
   );
 }
 
-function V5Stream({ items, dir, speed, tone }) {
-  const doubled = [...items, ...items, ...items];
-  return (
-    <div className={`v5-stream tone-${tone}`} style={{'--speed': speed, '--dir': dir==='ltr'?'normal':'reverse'}}>
-      <div className="v5-stream-track">
-        {doubled.map((it, idx) => {
-          if (it.kind === 'cat')  return <V5StreamCat  key={idx} c={it}/>;
-          if (it.kind === 'art')  return <V5StreamArt  key={idx} a={it}/>;
-          return <V5StreamQ key={idx} q={it.q}/>;
-        })}
-      </div>
-    </div>
+function V5Stream(_ref7) {
+  var items = _ref7.items, dir = _ref7.dir, speed = _ref7.speed, tone = _ref7.tone;
+  var doubled = [].concat(items, items, items);
+  return React.createElement('div', {
+    className: 'v5-stream tone-' + tone,
+    style: { '--speed': speed, '--dir': dir === 'ltr' ? 'normal' : 'reverse' }
+  },
+    React.createElement('div', { className: 'v5-stream-track' },
+      doubled.map(function(it, idx) {
+        if (it.kind === 'cat') return React.createElement(V5StreamCat, { key: idx, c: it });
+        if (it.kind === 'art') return React.createElement(V5StreamArt, { key: idx, a: it });
+        return React.createElement(V5StreamQ, { key: idx, q: it.q });
+      })
+    )
   );
 }
 
-function V5StreamCat({ c }) {
-  return (
-    <a className="v5-s-cat" href={V5_LINKS.articles}>
-      <span className="serif">{c.en}</span>
-      <span className="he">{c.he}</span>
-      <span className="mono">{c.count}</span>
-    </a>
+function V5StreamCat(_ref8) {
+  var c = _ref8.c;
+  return React.createElement('a', { className: 'v5-s-cat', href: V5_LINKS.articles },
+    React.createElement('span', { className: 'serif' }, c.en),
+    React.createElement('span', { className: 'he' }, c.he),
+    React.createElement('span', { className: 'mono' }, c.count)
   );
 }
 
-function V5StreamArt({ a }) {
-  return (
-    <a className={`v5-s-art tone-${a.color}`} href={V5_LINKS.articleDemo}>
-      <span className="mono">{a.cat}</span>
-      <strong>{a.title}</strong>
-      <span className="v5-s-art-arrow">↗</span>
-    </a>
+function V5StreamArt(_ref9) {
+  var a = _ref9.a;
+  return React.createElement('a', { className: 'v5-s-art tone-' + a.color, href: V5_LINKS.articleDemo },
+    React.createElement('span', { className: 'mono' }, a.cat),
+    React.createElement('strong', null, a.title),
+    React.createElement('span', { className: 'v5-s-art-arrow' }, '↗')
   );
 }
 
-function V5StreamQ({ q }) {
-  return (
-    <span className="v5-s-q">
-      <span className="serif">{q}</span>
-      <span className="v5-s-q-dot">·</span>
-    </span>
+function V5StreamQ(_ref10) {
+  var q = _ref10.q;
+  return React.createElement('span', { className: 'v5-s-q' },
+    React.createElement('span', { className: 'serif' }, q),
+    React.createElement('span', { className: 'v5-s-q-dot' }, '·')
   );
 }
 
-// ============== TICKER ==============
-const V5_TICKER = [
+// ============== TICKER / CTA / FOOT ==============
+
+var V5_TICKER = [
   { time: '14:32', text: 'Anthropic משיקה את Claude 5 Opus' },
   { time: '14:18', text: 'GPT-5o זמין עכשיו ב-API במחיר נמוך ב-40%' },
   { time: '13:55', text: 'מדריך חדש: בניית סוכן AI מלא ב-Cursor' },
-  { time: '13:41', text: 'Bolt.new עוקפת את v0 בבנצ׳מרק יצירת אפליקציות' },
+  { time: '13:41', text: 'Bolt.new עוקפת את v0 בבנצ׳מרקים יצירת אפליקציות' },
   { time: '13:22', text: 'Lovable מגייסת 100M$ בסבב סדרה B' },
 ];
+
 function V5Ticker() {
-  const items = [...V5_TICKER, ...V5_TICKER, ...V5_TICKER];
-  return (
-    <div className="v5-ticker">
-      <div className="v5-ticker-label">LIVE</div>
-      <div className="v5-ticker-track">
-        {items.map((t, i) => (
-          <div key={i} className="v5-ticker-item">
-            <span className="mono">{t.time}</span>
-            <span>{t.text}</span>
-            <span className="v5-ticker-sep">/</span>
-          </div>
-        ))}
-      </div>
-    </div>
+  var items = [].concat(V5_TICKER, V5_TICKER, V5_TICKER);
+  return React.createElement('div', { className: 'v5-ticker' },
+    React.createElement('div', { className: 'v5-ticker-label' }, 'LIVE'),
+    React.createElement('div', { className: 'v5-ticker-track' },
+      items.map(function(t, i) {
+        return React.createElement('div', { key: i, className: 'v5-ticker-item' },
+          React.createElement('span', { className: 'mono' }, t.time),
+          React.createElement('span', null, t.text),
+          React.createElement('span', { className: 'v5-ticker-sep' }, '/')
+        );
+      })
+    )
   );
 }
 
 function V5Cta() {
-  return (
-    <section id="community" className="v5-cta">
-      <div className="v5-cta-ghost">JOIN · JOIN · JOIN</div>
-      <h2>לחץ על הכפתור.<br/><span className="serif">הכל יגיע אליך.</span></h2>
-      <p>בלי טופס. בלי אימייל. רק WhatsApp / Telegram / Messenger.</p>
-      <div className="v5-cta-row">
-        <a className="v5-cta-btn primary" href={V5_LINKS.community}>הצטרף ב־WhatsApp <span>↗</span></a>
-        <a className="v5-cta-btn ghost" href={V5_LINKS.community}>Telegram ↗</a>
-        <a className="v5-cta-btn ghost" href={V5_LINKS.community}>Messenger ↗</a>
-      </div>
-    </section>
+  return React.createElement('section', { id: 'community', className: 'v5-cta' },
+    React.createElement('div', { className: 'v5-cta-ghost' }, 'JOIN · JOIN · JOIN'),
+    React.createElement('h2', null, 'לחץ על הכפתור.', React.createElement('br'), React.createElement('span', { className: 'serif' }, 'הכל יגיע אליך.')),
+    React.createElement('p', null, 'בלי טופס. בלי אימייל. רק WhatsApp / Telegram / Messenger.'),
+    React.createElement('div', { className: 'v5-cta-row' },
+      React.createElement('a', { className: 'v5-cta-btn primary', href: V5_LINKS.community }, 'הצטרף ב־WhatsApp ', React.createElement('span', null, '↗')),
+      React.createElement('a', { className: 'v5-cta-btn ghost', href: V5_LINKS.community }, 'Telegram ↗'),
+      React.createElement('a', { className: 'v5-cta-btn ghost', href: V5_LINKS.community }, 'Messenger ↗')
+    )
   );
 }
 
 function V5Foot() {
-  return (
-    <footer className="v5-foot">
-      <div className="v5-foot-top">
-        <div>
-          <div className="mono">© 2026 NVISION AI · TEL AVIV</div>
-          <div className="mono" style={{marginTop: 8}}>VIBE CODE NEWS · ISSUE №247</div>
-        </div>
-        <div className="v5-foot-cols">
-          <div><h5>CONTENT</h5><a href={V5_LINKS.news}>חדשות</a><a href={V5_LINKS.articles}>מאמרים</a><a href={V5_LINKS.article}>מדריכים</a><a href={V5_LINKS.tools}>קייסים</a></div>
-          <div><h5>CHANNELS</h5><a href={V5_LINKS.community}>WhatsApp ↗</a><a href={V5_LINKS.community}>Telegram ↗</a><a href={V5_LINKS.community}>Messenger ↗</a><a href={V5_LINKS.community}>RSS</a></div>
-          <div><h5>LEGAL</h5><a href={V5_LINKS.home}>פרטיות</a><a href={V5_LINKS.home}>תנאים</a><a href={V5_LINKS.community}>צור קשר</a></div>
-        </div>
-      </div>
-      <div className="v5-foot-mark">nVision<span>.</span></div>
-    </footer>
+  return React.createElement('footer', { className: 'v5-foot' },
+    React.createElement('div', { className: 'v5-foot-top' },
+      React.createElement('div', null,
+        React.createElement('div', { className: 'mono' }, '© 2026 NVISION AI · TEL AVIV'),
+        React.createElement('div', { className: 'mono', style: { marginTop: 8 } }, 'VIBE CODE NEWS · ISSUE №247')
+      ),
+      React.createElement('div', { className: 'v5-foot-cols' },
+        React.createElement('div', null,
+          React.createElement('h5', null, 'CONTENT'),
+          React.createElement('a', { href: V5_LINKS.news }, 'חדשות'),
+          React.createElement('a', { href: V5_LINKS.articles }, 'מאמרים'),
+          React.createElement('a', { href: V5_LINKS.article }, 'מדריכים'),
+          React.createElement('a', { href: V5_LINKS.tools }, 'קייסים')
+        ),
+        React.createElement('div', null,
+          React.createElement('h5', null, 'CHANNELS'),
+          React.createElement('a', { href: V5_LINKS.community }, 'WhatsApp ↗'),
+          React.createElement('a', { href: V5_LINKS.community }, 'Telegram ↗'),
+          React.createElement('a', { href: V5_LINKS.community }, 'Messenger ↗'),
+          React.createElement('a', { href: V5_LINKS.community }, 'RSS')
+        ),
+        React.createElement('div', null,
+          React.createElement('h5', null, 'LEGAL'),
+          React.createElement('a', { href: V5_LINKS.home }, 'פרטיות'),
+          React.createElement('a', { href: V5_LINKS.home }, 'תנאים'),
+          React.createElement('a', { href: V5_LINKS.community }, 'צור קשר')
+        )
+      )
+    ),
+    React.createElement('div', { className: 'v5-foot-mark' }, 'nVision', React.createElement('span', null, '.'))
   );
 }
 
+// ============== EDITOR COMPONENTS ==============
+
+var BLOCK_TYPES = [
+  { type: 'paragraph', label: 'פסקה', icon: '¶', desc: 'טקסט רגיל' },
+  { type: 'heading',   label: 'כותרת', icon: 'H', desc: 'כותרת מקטעת' },
+  { type: 'image',     label: 'תמונה', icon: '🖼', desc: 'URL של תמונה' },
+  { type: 'code',      label: 'קוד',   icon: '</>', desc: 'בלוק קוד' },
+];
+
+function V5EditorBlock(_ref11) {
+  var block = _ref11.block, isFirst = _ref11.isFirst, onUpdate = _ref11.onUpdate, onRemove = _ref11.onRemove, onInsertAfter = _ref11.onInsertAfter, onMoveUp = _ref11.onMoveUp, onMoveDown = _ref11.onMoveDown, onChangeType = _ref11.onChangeType;
+  var textareaRef = useV5R(null);
+
+  // Auto-resize textarea
+  useV5E(function() {
+    var el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 2 + 'px';
+    }
+  }, [block.content]);
+
+  var handleKeyDown = function(e) {
+    // Enter in heading creates new paragraph block
+    if (e.key === 'Enter' && !e.shiftKey && block.type === 'heading') {
+      e.preventDefault();
+      onInsertAfter(block.id);
+      return;
+    }
+    // Backspace on empty block (not the first) removes it
+    if (e.key === 'Backspace' && !block.content && !isFirst) {
+      e.preventDefault();
+      onRemove(block.id);
+    }
+    // Tab in heading cycles level
+    if (e.key === 'Tab' && block.type === 'heading') {
+      e.preventDefault();
+      onChangeType(block.id);
+    }
+    // Enter in paragraph/code just types normally (textarea handles it)
+  };
+
+  var bt = BLOCK_TYPES.find(function(b) { return b.type === block.type; });
+  var icon = bt ? bt.icon : '¶';
+  var label = bt ? bt.label : 'פסקה';
+
+  return React.createElement('div', { className: 'v5-block', 'data-type': block.type },
+    React.createElement('div', { className: 'v5-block-left' },
+      React.createElement('span', { className: 'v5-block-badge ' + block.type }, icon)
+    ),
+    React.createElement('div', { className: 'v5-block-content-wrap' },
+      block.type === 'image' ? React.createElement('input', {
+        ref: textareaRef,
+        className: 'v5-block-url-input',
+        type: 'url',
+        value: block.content,
+        onChange: function(e) { return onUpdate(block.id, e.target.value); },
+        onKeyDown: handleKeyDown,
+        placeholder: 'הדבק URL של תמונה...',
+        dir: 'ltr'
+      }) : block.type === 'code' ? React.createElement('textarea', {
+        ref: textareaRef,
+        className: 'v5-block-code',
+        value: block.content,
+        onChange: function(e) { return onUpdate(block.id, e.target.value); },
+        onKeyDown: handleKeyDown,
+        placeholder: 'הקלד קוד כאן...',
+        rows: 4,
+        dir: 'ltr',
+        spellCheck: false
+      }) : React.createElement('textarea', {
+        ref: textareaRef,
+        className: 'v5-block-textarea',
+        value: block.content,
+        onChange: function(e) { return onUpdate(block.id, e.target.value); },
+        onKeyDown: handleKeyDown,
+        placeholder: block.type === 'heading' ? 'כותרת...' : 'כתוב פה...',
+        dir: block.type === 'heading' ? 'rtl' : 'rtl',
+        spellCheck: true,
+        rows: block.type === 'heading' ? 1 : 3
+      }),
+      block.content && block.type === 'image' ? React.createElement('img', {
+        className: 'v5-block-image-preview',
+        src: block.content,
+        alt: '',
+        onDoubleClick: function() { return onUpdate(block.id, ''); }
+      }) : null
+    ),
+    React.createElement('div', { className: 'v5-block-controls' },
+      React.createElement('button', { className: 'v5-type-btn', onClick: function() { return onChangeType(block.id); }, title: 'החלף סוג' }, icon),
+      React.createElement('button', { className: 'v5-up-btn', onClick: function() { return onMoveUp(block.id); }, disabled: isFirst, title: 'העבר למעלה' }, '↑'),
+      React.createElement('button', { className: 'v5-down-btn', onClick: function() { return onMoveDown(block.id); }, disabled: false, title: 'העבר למטה' }, '↓'),
+      React.createElement('button', { className: 'v5-del-btn', onClick: function() { return onRemove(block.id); }, disabled: isFirst, title: 'מחק' }, '✕')
+    )
+  );
+}
+
+function V5ArticleEditor(_ref12) {
+  var initialData = _ref12.initialData, onSave = _ref12.onSave, onDelete = _ref12.onDelete, onCancel = _ref12.onCancel, saveLabel = _ref12.saveLabel;
+  var _useState9 = useV5S(initialData?.title || '');
+  var title = _useState9[0], setTitle = _useState9[1];
+  var _useState10 = useV5S(initialData?.slug || '');
+  var slug = _useState10[0], setSlug = _useState10[1];
+  var _useState11 = useV5S(initialData?.content && initialData.content.length > 0 ? initialData.content : [{ id: generateId(), type: 'paragraph', content: '' }]);
+  var blocks = _useState11[0], setBlocks = _useState11[1];
+  var _useState12 = useV5S(false);
+  var saving = _useState12[0], setSaving = _useState12[1];
+  var _useState13 = useV5S('');
+  var error = _useState13[0], setError = _useState13[1];
+  var _useState14 = useV5S(false);
+  var saved = _useState14[0], setSaved = _useState14[1];
+  var _useState15 = useV5S(false);
+  var showSanityOption = _useState15[0], setShowSanityOption = _useState15[1];
+
+  // Auto-generate slug from title
+  useV5E(function() {
+    if (title && !initialData?.slug) {
+      var generated = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      setSlug(generated);
+    }
+  }, [title]);
+
+  var addBlock = function(type, afterIndex) {
+    var newBlock = { id: generateId(), type: type, content: '' };
+    var newBlocks = [].concat(blocks);
+    newBlocks.splice(afterIndex + 1, 0, newBlock);
+    setBlocks(newBlocks);
+    setTimeout(function() {
+      var allTextareas = document.querySelectorAll('.v5-editor-blocks textarea');
+      if (allTextareas[afterIndex + 1]) {
+        allTextareas[afterIndex + 1].focus();
+        // Scroll into view
+        allTextareas[afterIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 80);
+  };
+
+  var removeBlock = function(id) {
+    if (blocks.length <= 1) return;
+    setBlocks(blocks.filter(function(b) { return b.id !== id; }));
+  };
+
+  var updateBlock = function(id, content) {
+    setBlocks(blocks.map(function(b) { return b.id === id ? { id: b.id, type: b.type, content: content } : b; }));
+  };
+
+  var moveBlock = function(id, direction) {
+    var idx = blocks.findIndex(function(b) { return b.id === id; });
+    if (idx === -1) return;
+    var newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= blocks.length) return;
+    var newBlocks = [].concat(blocks);
+    var temp = newBlocks[idx];
+    newBlocks[idx] = newBlocks[newIdx];
+    newBlocks[newIdx] = temp;
+    setBlocks(newBlocks);
+  };
+
+  var changeBlockType = function(id) {
+    var idx = blocks.findIndex(function(b) { return b.id === id; });
+    if (idx === -1) return;
+    var typeOrder = ['paragraph', 'heading', 'image', 'code'];
+    var currentIdx = typeOrder.indexOf(blocks[idx].type);
+    var nextType = typeOrder[(currentIdx + 1) % typeOrder.length];
+    setBlocks(blocks.map(function(b) {
+      if (b.id !== id) return b;
+      var content = b.content;
+      if (nextType === 'paragraph') content = content.replace(/^#{1,6}\s/, '').replace(/^>\s/, '');
+      return { id: b.id, type: nextType, content: content };
+    }));
+  };
+
+  var handleSave = function() {
+    setError('');
+    if (!title.trim()) { setError('יש להזין כותרת למאמר'); return; }
+    var finalSlug = slug.trim() || sanitizeSlug(title);
+    if (!finalSlug) { setError('יש להזין slug תקין'); return; }
+    var hasContent = blocks.some(function(b) { return b.content.trim().length > 0; });
+    if (!hasContent) { setError('יש להוסיף לפחות בלוק אחד עם תוכן'); return; }
+
+    setSaving(true);
+    try {
+      var cleanBlocks = blocks.map(function(b) {
+        return { id: b.id, type: b.type, content: b.content || '' };
+      });
+
+      var savedArticle = saveArticleToLocal({
+        title: title.trim(),
+        slug: finalSlug,
+        content: cleanBlocks,
+      });
+
+      setSaved(true);
+      setTimeout(function() { setSaved(false); }, 2500);
+
+      if (onSave) onSave(savedArticle);
+    } catch (err) {
+      setError('שגיאה בשמירה: ' + (err.message || err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  var handleSyncSanity = function() {
+    if (!SANITY_WRITE_TOKEN) {
+      alert('עליך להגדיר טוקן כתיבה ב-Sanity כדי לסנכרן. שנה את SANITY_WRITE_TOKEN בקובץ ה-.env.local');
+      return;
+    }
+    var finalSlug = slug.trim() || sanitizeSlug(title);
+    var syncBlocks = blocks.map(function(b) {
+      if (b.type === 'image') return { _type: 'image', asset: { _type: 'reference', _ref: '' }, alt: b.content || '' };
+      if (b.type === 'code') return { _type: 'code', code: b.content || '', language: 'javascript', filename: '' };
+      if (b.type === 'heading') {
+        var lvl = 2;
+        var m = b.content.match(/^(#{1,6})\s/);
+        if (m) { lvl = m[1].length; }
+        var txt = b.content.replace(/^#{1,6}\s/, '');
+        return { _type: 'block', children: [{ _type: 'span', text: txt, marks: [] }], style: 'h' + lvl, markDefs: [] };
+      }
+      return { _type: 'block', children: [{ _type: 'span', text: b.content || '', marks: [] }], style: 'normal', markDefs: [] };
+    });
+
+    syncArticleToSanity({ title: title.trim(), slug: finalSlug, content: syncBlocks })
+      .then(function(res) {
+        if (res && !res.error) {
+          alert('המאמר סונכרן בהצלחה ל-Sanity!');
+        } else {
+          alert('שגיאה בסנכרון: ' + JSON.stringify(res));
+        }
+      })
+      .catch(function(e) {
+        alert('שגיאה בסנכרון: ' + e.message);
+      });
+  };
+
+  var handleDelete = function() {
+    if (initialData?.slug && confirm('למחוק את המאמר "' + initialData.title + '"? פעולה בלתי הפיכה.')) {
+      deleteArticleFromLocal(initialData.slug);
+      if (onDelete) onDelete();
+    }
+  };
+
+  var addAfterBlock = function(id, type) {
+    var idx = blocks.findIndex(function(b) { return b.id === id; });
+    if (idx === -1) return;
+    addBlock(type, idx);
+  };
+
+  var wordCount = blocks.reduce(function(sum, b) {
+    return sum + (b.content ? b.content.split(/\s+/).filter(function(w) { return w; }).length : 0);
+  }, 0);
+
+  var currentTypeIcon = BLOCK_TYPES.find(function(b) { return b.type === (blocks[blocks.length - 1] || {}).type; });
+
+  return React.createElement('div', { className: 'v5-editor-standalone' },
+    React.createElement('div', { className: 'v5-editor-wrap' },
+      // Header
+      React.createElement('div', { className: 'v5-editor-head' },
+        React.createElement('input', {
+          className: 'v5-editor-title',
+          type: 'text',
+          value: title,
+          onChange: function(e) { return setTitle(e.target.value); },
+          placeholder: 'כותרת המאמר...',
+          dir: 'rtl',
+          spellCheck: true
+        }),
+        React.createElement('div', { className: 'v5-editor-slug-row' },
+          React.createElement('span', null, '/article/'),
+          React.createElement('input', {
+            className: 'v5-editor-slug-input',
+            type: 'text',
+            value: slug,
+            onChange: function(e) { return setSlug(e.target.value); },
+            placeholder: 'my-article',
+            dir: 'ltr',
+            spellCheck: false
+          })
+        ),
+        error && React.createElement('div', { className: 'v5-editor-error' }, error)
+      ),
+
+      // Block toolbar
+      React.createElement('div', { className: 'v5-block-toolbar' },
+        BLOCK_TYPES.map(function(bt) {
+          return React.createElement('button', {
+            key: bt.type,
+            className: 'v5-block-btn ' + (bt.type === 'paragraph' ? 'sage' : bt.type === 'heading' ? 'mustard' : bt.type === 'code' ? 'sky' : 'ghost'),
+            onClick: function() { addAfterBlock(blocks.length - 1, bt.type); }
+          }, bt.icon, ' ', bt.label);
+        })
+      ),
+
+      // Blocks
+      React.createElement('div', { className: 'v5-editor-blocks' },
+        blocks.map(function(block, index) {
+          return React.createElement(V5EditorBlock, {
+            key: block.id,
+            block: block,
+            index: index,
+            isFirst: index === 0,
+            onUpdate: function(id, newContent) { return updateBlock(id, newContent); },
+            onRemove: removeBlock,
+            onMoveUp: function(id) { return moveBlock(id, 'up'); },
+            onMoveDown: function(id) { return moveBlock(id, 'down'); },
+            onChangeType: changeBlockType,
+            onInsertAfter: function(id) { addAfterBlock(id, 'paragraph'); }
+          });
+        })
+      ),
+
+      // Word count
+      React.createElement('div', { style: { textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--v5-dim)', marginBottom: 16 } },
+        wordCount + ' מילים · ' + blocks.length + ' בלוקים'
+      ),
+
+      // Footer
+      React.createElement('div', { className: 'v5-editor-footer' },
+        React.createElement('div', { className: 'v5-editor-actions' },
+          React.createElement('button', { className: 'v5-editor-btn primary', onClick: handleSave, disabled: saving },
+            saving ? 'שומר...' : (saveLabel || 'שמור')
+          ),
+          React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onCancel }, 'ביטול'),
+          initialData?.slug && React.createElement('button', { className: 'v5-editor-btn danger', onClick: handleDelete }, 'מחק')
+        ),
+        React.createElement('div', null,
+          saving && React.createElement('span', { className: 'v5-editor-saving' }, 'שומר...'),
+          saved && React.createElement('span', { className: 'v5-editor-saved show' }, '✓ נשמר')
+        )
+      ),
+
+      // Sanity sync option
+      true && React.createElement('div', {
+        style: {
+          marginTop: 20, padding: 14, border: '1px dashed var(--v5-faint)',
+          borderRadius: 8, fontSize: 12, color: 'var(--v5-dim)', textAlign: 'center'
+        }
+      },
+        React.createElement('button', {
+          className: 'v5-editor-btn ghost',
+          onClick: handleSyncSanity,
+          style: { fontSize: 11, padding: '5px 14px', border: '1px solid var(--v5-sky)', color: 'var(--v5-sky)', background: 'transparent', boxShadow: 'none' }
+        },
+          '📡 סנכרן ל-Sanity'
+        ),
+        React.createElement('div', { style: { marginTop: 6, fontSize: 10 } },
+          'שמירה מקומית + אופציונלית ל-Sanity'
+        )
+      )
+    )
+  );
+}
+
+// ============== MY ARTICLES (List + Management) ==============
+
+function V5MyArticles() {
+  var _useState16 = useV5S([]);
+  var articles = _useState16[0], setArticles = _useState16[1];
+  var _useState17 = useV5S('published');
+  var activeTab = _useState17[0], setActiveTab = _useState17[1];
+  var _useState18 = useV5S('newest');
+  var sortBy = _useState18[0], setSortBy = _useState18[1];
+  var _useState19 = useV5S('');
+  var filterText = _useState19[0], setFilterText = _useState19[1];
+
+  useV5E(function() {
+    var arts = loadArticles();
+    setArticles(arts);
+
+    var refresh = function() {
+      setArticles(loadArticles());
+    };
+    window.addEventListener('v5ArticlesChanged', refresh);
+    return function() { window.removeEventListener('v5ArticlesChanged', refresh); };
+  }, []);
+
+  var stats = useMemo(function() {
+    var published = articles.filter(function(a) { return a.content && a.content.some(function(b) { return b.content; }); });
+    var drafts = articles.filter(function(a) {
+      return !a.content || a.content.length === 0 || a.content.every(function(b) { return !b.content; });
+    });
+    var totalWords = articles.reduce(function(sum, a) {
+      return sum + (a.content ? a.content.reduce(function(s, b) { return s + (b.content ? b.content.split(/\s+/).length : 0); }, 0) : 0);
+    }, 0);
+    return { total: articles.length, published: published.length, drafts: drafts.length, totalWords: totalWords };
+  }, [articles]);
+
+  // Filter and sort
+  var filtered = useMemo(function() {
+    var result = [].concat(articles);
+
+    if (activeTab === 'published') {
+      result = result.filter(function(a) { return a.content && a.content.some(function(b) { return b.content; }); });
+    } else if (activeTab === 'drafts') {
+      result = result.filter(function(a) {
+        return !a.content || a.content.length === 0 || a.content.every(function(b) { return !b.content; });
+      });
+    }
+
+    if (filterText.trim()) {
+      var q = filterText.toLowerCase();
+      result = result.filter(function(a) {
+        return a.title.toLowerCase().includes(q) ||
+               a.slug.toLowerCase().includes(q) ||
+               (a.content && a.content.some(function(b) { return b.content && b.content.toLowerCase().includes(q); }));
+      });
+    }
+
+    if (sortBy === 'newest') result.sort(function(a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); });
+    else if (sortBy === 'oldest') result.sort(function(a, b) { return new Date(a.updatedAt) - new Date(b.updatedAt); });
+    else if (sortBy === 'alpha') result.sort(function(a, b) { return a.title.localeCompare(b.title, 'he'); });
+
+    return result;
+  }, [articles, activeTab, filterText, sortBy]);
+
+  return React.createElement('div', { className: 'v5-editor-section' },
+    // Section Head
+    React.createElement('div', { className: 'v5-editor-section-head' },
+      React.createElement('div', null,
+        React.createElement('h2', null,
+          'עריכת מאמרים ',
+          React.createElement('span', { className: 'serif' }, 'בתוך האתר.')
+        ),
+        React.createElement('p', { style: { marginTop: 8, fontSize: 15, color: 'var(--v5-ink-2)' } },
+          'צרו, ערכו ונהלו מאמרים — בלי לצאת מהאתר. כל המאמרים נשמרים ב-localStorage.'
+        )
+      ),
+      React.createElement('a', { className: 'v5-editor-new-btn', href: 'article.html?action=new' }, '+ מאמר חדש')
+    ),
+
+    // Stats bar
+    React.createElement('div', {
+      style: {
+        display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap',
+        marginBottom: 28, padding: '14px 0', borderBottom: '1px solid var(--v5-line)'
+      }
+    },
+      React.createElement('div', { style: { textAlign: 'center' } },
+        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-ink)' } }, stats.total),
+        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'סך הכל')
+      ),
+      React.createElement('div', { style: { textAlign: 'center' } },
+        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-sage)' } }, stats.published),
+        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'פורסמו')
+      ),
+      React.createElement('div', { style: { textAlign: 'center' } },
+        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-cobalt)' } }, stats.drafts),
+        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'טיוטות')
+      ),
+      React.createElement('div', { style: { textAlign: 'center' } },
+        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-mustard)' } }, stats.totalWords),
+        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'מילים')
+      )
+    ),
+
+    // Toolbar
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 } },
+      React.createElement('div', { className: 'v5-editor-tabs' },
+        React.createElement('button', {
+          className: 'v5-editor-tab ' + (activeTab === 'published' ? 'active' : ''),
+          onClick: function() { return setActiveTab('published'); }
+        }, 'פורסמו (' + stats.published + ')'),
+        React.createElement('button', {
+          className: 'v5-editor-tab ' + (activeTab === 'drafts' ? 'active' : ''),
+          onClick: function() { return setActiveTab('drafts'); }
+        }, 'טיוטות (' + stats.drafts + ')'),
+        React.createElement('button', {
+          className: 'v5-editor-tab ' + (activeTab === 'all' ? 'active' : ''),
+          onClick: function() { return setActiveTab('all'); }
+        }, 'הכל (' + stats.total + ')')
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'חיפוש מאמרים...',
+          value: filterText,
+          onChange: function(e) { return setFilterText(e.target.value); },
+          style: {
+            padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--v5-faint)',
+            background: 'rgba(255,255,255,0.1)', color: 'var(--v5-ink)',
+            fontFamily: 'Heebo, sans-serif', fontSize: 12, width: 160, direction: 'rtl'
+          },
+          dir: 'rtl'
+        }),
+        React.createElement('select', {
+          value: sortBy,
+          onChange: function(e) { return setSortBy(e.target.value); },
+          style: {
+            padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--v5-faint)',
+            background: 'rgba(255,255,255,0.1)', color: 'var(--v5-ink)',
+            fontFamily: 'JetBrains Mono', fontSize: 10, direction: 'rtl'
+          }
+        },
+          React.createElement('option', { value: 'newest' }, 'הכי חדש'),
+          React.createElement('option', { value: 'oldest' }, 'הכי ישן'),
+          React.createElement('option', { value: 'alpha' }, 'אלפביתי')
+        )
+      )
+    ),
+
+    // Article Grid
+    filtered.length === 0 ?
+      React.createElement('div', { className: 'v5-editor-empty' },
+        React.createElement('span', { className: 'v5-editor-empty-icon' },
+          activeTab === 'published' ? '📄' : activeTab === 'drafts' ? '📝' : '📭'
+        ),
+        React.createElement('h3', null,
+          activeTab === 'published' ? 'אין מאמרים פורסמים' :
+          activeTab === 'drafts' ? 'אין טיוטות' :
+          filterText ? 'לא נמצאו תוצאות' : 'אין מאמרים'
+        ),
+        React.createElement('p', null,
+          activeTab === 'published'
+            ? 'תתחיל לכתוב מאמר חדש כדי לראות אותו כאן.'
+            : 'תתחיל לכתוב דברים!'
+        ),
+        React.createElement('a', { className: 'v5-editor-new-btn', href: 'article.html?action=new', style: { marginTop: 16 } },
+          '+ צור מאמר חדש'
+        )
+      )
+    :
+      React.createElement('div', { className: 'v5-editor-grid' },
+        filtered.map(function(article) {
+          var wordCount = article.content
+            ? article.content.reduce(function(sum, b) { return sum + (b.content ? b.content.split(/\s+/).length : 0); }, 0)
+            : 0;
+          var blockTypes = article.content
+            ? article.content.reduce(function(acc, b) { var _a; _a = acc; _a[b.type] = (_a[b.type] || 0) + 1; return _a; }, {})
+            : {};
+
+          return React.createElement('a', {
+            key: article.id,
+            href: 'article.html?action=edit&slug=' + encodeURIComponent(article.slug),
+            className: 'v5-editor-card'
+          },
+            React.createElement('div', { className: 'v5-editor-card-meta' },
+              React.createElement('span', null, new Date(article.updatedAt).toLocaleDateString('he-IL')),
+              React.createElement('span', null, wordCount + ' מילים'),
+              Object.entries(blockTypes).map(function(_ref13) {
+                var type = _ref13[0], count = _ref13[1];
+                return React.createElement('span', { key: type }, count, ' ', type);
+              })
+            ),
+            React.createElement('h3', null, article.title),
+            React.createElement('div', {
+              className: 'v5-editor-card-actions',
+              onClick: function(e) {
+                if (e.target.closest('.v5-del-btn')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (confirm('למחוק את "' + article.title + '"?')) {
+                    deleteArticleFromLocal(article.slug);
+                  }
+                }
+              }
+            },
+              React.createElement('span', { style: { fontSize: 10.5, color: 'var(--v5-dim)', marginRight: 'auto' } },
+                article.createdAt !== article.updatedAt ? 'נערך ' + new Date(article.updatedAt).toLocaleDateString('he-IL') : 'נוצר ' + new Date(article.createdAt).toLocaleDateString('he-IL')
+              ),
+              React.createElement('a', { href: 'article.html?action=edit&slug=' + encodeURIComponent(article.slug) }, '✏️ ערוך'),
+              React.createElement('a', { href: 'article.html?action=view&slug=' + encodeURIComponent(article.slug) }, '👁 תצוגה'),
+              React.createElement('button', { className: 'v5-del-btn' }, '🗑')
+            )
+          );
+        }),
+
+        // New article card
+        React.createElement('a', { className: 'v5-editor-new-card', href: 'article.html?action=new' },
+          React.createElement('span', { className: 'plus' }, '+'),
+          React.createElement('span', { className: 'label' }, 'מאמר חדש')
+        )
+      )
+  );
+}
+
+// ============== ARTICLE VIEWER ==============
+
+function V5ArticleViewer(_ref14) {
+  var article = _ref14.article, onBack = _ref14.onBack;
+
+  if (!article) {
+    return React.createElement('div', { className: 'v5-editor-standalone' },
+      React.createElement('div', { className: 'v5-editor-wrap' },
+        React.createElement('div', { className: 'v5-editor-error' }, 'מאמר לא נמצא'),
+        React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onBack }, '← חזרה לרשימה')
+      )
+    );
+  }
+
+  return React.createElement('div', { className: 'v5-editor-standalone' },
+    React.createElement('div', { className: 'v5-editor-wrap' },
+      React.createElement('div', { className: 'v5-article-view' },
+        React.createElement('div', { className: 'v5-article-view-head' },
+          React.createElement('h1', null, article.title),
+          React.createElement('div', { className: 'meta' },
+            React.createElement('span', { dir: 'ltr' }, article.slug),
+            ' · ',
+            React.createElement('span', null, 'עודכן: ' + new Date(article.updatedAt).toLocaleDateString('he-IL'))
+          )
+        ),
+        React.createElement('div', {
+          className: 'v5-article-view-body',
+          dangerouslySetInnerHTML: { __html: V5RenderBlocks(article.content) }
+        }),
+        React.createElement('div', { className: 'v5-article-view-actions' },
+          React.createElement('button', { className: 'v5-editor-btn primary', onClick: function() {
+            window.location.href = 'article.html?action=edit&slug=' + encodeURIComponent(article.slug);
+          }}, 'ערוך מאמר ↗'),
+          React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onBack }, '← חזרה')
+        )
+      )
+    )
+  );
+}
+
+function V5RenderBlocks(content) {
+  if (!content || !content.length) return '<p style="color:var(--v5-dim)">אין תוכן</p>';
+  return content.map(function(block) {
+    var text = block.content || '';
+    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    switch (block.type) {
+      case 'heading':
+        var level = 2;
+        var m = text.match(/^(#{1,6})\s/);
+        if (m) { level = m[1].length; text = text.replace(/^#{1,6}\s/, ''); }
+        escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<h2 style="font-size:26px;font-weight:800;margin:28px 0 10px;letter-spacing:-0.02em;direction:rtl;text-align:right">' + escaped + '</h2>';
+      case 'image':
+        if (!text) return '';
+        return '<img src="' + escaped + '" alt="" style="max-width:100%;border-radius:8px;margin:16px 0;max-height:300px;object-fit:cover;display:block" />';
+      case 'code':
+        return '<pre style="background:var(--v5-ink);color:var(--v5-acid);padding:16px;border-radius:8px;overflow-x:auto;margin:16px 0;font-family:JetBrains Mono,monospace;font-size:12px;line-height:1.6;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all"><code>' + escaped + '</code></pre>';
+      default:
+        return '<p style="margin-bottom:16px;line-height:1.8;direction:rtl;text-align:right">' + escaped.replace(/\n/g, '<br/>') + '</p>';
+    }
+  }).join('\n');
+}
+
+// ============== PAGES ==============
+
 function V5HomePage() {
-  return (
-    <>
-      <main id="home" className="v5-hero">
-        <div className="v5-paper"></div>
-        <div className="v5-grain"></div>
-        <V5Keywords/>
-        <V5Title/>
-      </main>
-      <V5Ticker/>
-      <V5Newsroom/>
-      <V5ArticleWall/>
-      <V5CategoryPage/>
-      <V5ArticleTemplate/>
-      <V5Canvas/>
-      <V5Cta/>
-    </>
+  return React.createElement(React.Fragment, null,
+    React.createElement('main', { id: 'home', className: 'v5-hero' },
+      React.createElement('div', { className: 'v5-paper' }),
+      React.createElement('div', { className: 'v5-grain' }),
+      React.createElement(V5Keywords),
+      React.createElement(V5Title)
+    ),
+    React.createElement(V5Ticker),
+    React.createElement(V5Newsroom),
+    React.createElement(V5ArticleWall),
+    React.createElement(V5CategoryPage),
+    React.createElement(V5ArticleTemplate),
+    React.createElement(V5Canvas),
+    React.createElement(V5Cta)
   );
 }
 
 function V5ArticlesPage() {
-  return (
-    <>
-      <V5Ticker/>
-      <V5CategoryPage/>
-      <section className="v5-article-gateway">
-        <div className="v5-article-gateway-inner" data-v5-reveal>
-          <div className="v5-eyebrow">[ OPEN A NEW ARTICLE ]</div>
-          <h2>רוצה לראות איך מאמר נראה? <span className="serif">זה השער.</span></h2>
-          <p>לחיצה אחת פותחת את עמוד המאמר הייעודי, עם כל האלמנטים שכדאי לבחון לפני שמייצרים תוכן אמיתי.</p>
-          <a className="v5-title-action primary" href={V5_LINKS.article}>פתח מאמר חדש ↗</a>
-        </div>
-      </section>
-      <V5Canvas/>
-      <V5Cta/>
-    </>
-  );
+  // Read URL params on initial render (lazy init to avoid flash)
+  var _useState20 = useV5S(function() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('action') || '';
+  });
+  var action = _useState20[0], setAction = _useState20[1];
+
+  var _useState21 = useV5S(function() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('slug') || '';
+  });
+  var slug = _useState21[0], setSlug = _useState21[1];
+
+  // Refresh on URL change (for back/forward navigation)
+  useV5E(function() {
+    function onPopState() {
+      var params = new URLSearchParams(window.location.search);
+      setAction(params.get('action') || '');
+      setSlug(params.get('slug') || '');
+    }
+    window.addEventListener('popstate', onPopState);
+    return function() { window.removeEventListener('popstate', onPopState); };
+  }, []);
+
+  // Edit or create article
+  if (action === 'edit' || action === 'new') {
+    var article = action === 'edit' && slug ? getArticleFromLocal(slug) : null;
+    return React.createElement(V5ArticleEditor, {
+      initialData: article || undefined,
+      onSave: function(saved) {
+        window.location.href = 'articles.html';
+      },
+      onDelete: function() {
+        window.location.href = 'articles.html';
+      },
+      onCancel: function() {
+        window.location.href = 'articles.html';
+      },
+      saveLabel: action === 'new' ? 'יצירת מאמר' : 'שמור שינויים'
+    });
+  }
+
+  // View article
+  if (action === 'view' && slug) {
+    var viewArticle = getArticleFromLocal(slug);
+    return React.createElement(V5ArticleViewer, {
+      article: viewArticle,
+      onBack: function() { window.location.href = 'articles.html'; }
+    });
+  }
+
+  // Default: show article list
+  return React.createElement(V5MyArticles);
 }
 
 function V5ArticlePage() {
-  const view = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'demo' ? 'demo' : 'new';
-  return (
-    <>
-      <V5Ticker/>
-      <V5ArticleTemplate mode={view}/>
-      <V5Cta/>
-    </>
+  var view = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'demo' ? 'demo' : 'new';
+  return React.createElement(React.Fragment, null,
+    React.createElement(V5Ticker),
+    React.createElement(V5ArticleTemplate, { mode: view }),
+    React.createElement(V5Cta)
   );
 }
 
-function V5App({ page = 'home' }) {
+// ============== APP ==============
+
+function V5App(_ref15) {
+  var page = _ref15.page;
   useV5Reveal();
-  const activeKey = page === 'articles' ? 'articles' : page === 'article' ? 'article' : 'home';
-  return (
-    <div className={`v5-root v5-page-${page}`} dir="rtl">
-      <V5Nav activeKey={activeKey}/>
-      {page === 'articles' ? <V5ArticlesPage/> : page === 'article' ? <V5ArticlePage/> : <V5HomePage/>}
-      <V5Foot/>
-    </div>
+  var activeKey = page === 'articles' ? 'articles' : page === 'article' ? 'article' : 'home';
+  return React.createElement('div', { className: 'v5-root v5-page-' + page, dir: 'rtl' },
+    React.createElement(V5Nav, { activeKey: activeKey }),
+    page === 'articles' ? React.createElement(V5ArticlesPage) :
+    page === 'article' ? React.createElement(V5ArticlePage) :
+    React.createElement(V5HomePage),
+    React.createElement(V5Foot)
   );
 }
 
 function mountVariationFive() {
-  const page = document.body.dataset.page || 'home';
+  var page = document.body.dataset.page || 'home';
   if (page === 'article') {
-    const isDemo = new URLSearchParams(window.location.search).get('view') === 'demo';
+    var isDemo = new URLSearchParams(window.location.search).get('view') === 'demo';
     document.title = isDemo ? 'nVision AI · Demo Article · Variation E' : 'nVision AI · New Article Template · Variation E';
   }
-  ReactDOM.createRoot(document.getElementById('root')).render(<V5App page={page} />);
+  if (page === 'articles') {
+    document.title = 'nVision AI · Articles · Variation E';
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(V5App, { page: page }));
 }
 
 window.V5App = V5App;
 window.mountVariationFive = mountVariationFive;
 window.VariationFive = function VariationFive() {
-  return <V5App page="home" />;
+  return React.createElement(V5App, { page: 'home' });
 };
-
