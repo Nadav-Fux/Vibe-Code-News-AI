@@ -14,7 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Inject public Sanity config into client bundle
+        run: |
+          npm install dotenv --no-audit --no-fund --silent || true
+          node .github/scripts/inject-env.js
+        env:
+          CI: 'true'
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          SANITY_DATASET: ${{ secrets.SANITY_DATASET }}
+          SANITY_API_VERSION: ${{ secrets.SANITY_API_VERSION }}
+          SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}
+          # NOTE: SANITY_WRITE_TOKEN and EDITOR_SECRET are NOT injected here.
+          # They are set in Cloudflare Pages → Settings → Environment Variables
+          # and only read by functions/api/*.js at request time.
+
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

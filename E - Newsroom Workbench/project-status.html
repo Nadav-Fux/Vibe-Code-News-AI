@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>nVision AI · Project Status · Variation E</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="v5-styles.css"/>
+<link rel="stylesheet" href="v5-editor.css"/>
+<style>
+/* ---- Project Status Page — scoped rules ---- */
+.ps-root {
+  background: var(--v5-paper);
+  color: var(--v5-ink);
+  font-family: 'Heebo', sans-serif;
+  min-height: 100vh;
+}
+.ps-hero {
+  padding: 64px 40px 48px;
+  border-bottom: 1.5px solid var(--v5-ink);
+  background: var(--v5-paper);
+  position: relative;
+  overflow: hidden;
+}
+.ps-hero-bg {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(to right,  var(--v5-grid, #d6cfba) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--v5-grid, #d6cfba) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.3;
+}
+.ps-hero-inner { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; text-align: center; }
+.ps-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.22em; font-weight: 700;
+  color: var(--v5-sage); text-transform: uppercase;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-bottom: 20px;
+}
+.ps-eyebrow::before, .ps-eyebrow::after {
+  content: ''; flex: 0 0 48px; height: 1px; background: var(--v5-sage);
+}
+.ps-hero h1 {
+  font-size: clamp(42px, 7vw, 88px);
+  font-weight: 900; letter-spacing: -0.04em;
+  line-height: 0.9; margin: 0 0 16px;
+}
+.ps-hero h1 .serif {
+  font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400;
+  color: var(--v5-cobalt); font-size: 1.05em;
+}
+.ps-hero-sub {
+  font-size: 15px; color: var(--v5-dim); letter-spacing: 0.01em;
+  margin-top: 12px;
+}
+.ps-live-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--v5-ink); color: var(--v5-paper);
+  padding: 7px 18px; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.04em; margin-top: 22px;
+  box-shadow: 4px 5px 0 var(--v5-sage);
+}
+.ps-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--v5-acid); animation: v5pulse 1.6s infinite;
+}
+/* ---- Tab strip ---- */
+.ps-tab-strip {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; gap: 0;
+  border-bottom: 1.5px solid var(--v5-ink);
+  background: rgba(244,240,232,0.94);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ps-tab-strip::-webkit-scrollbar { display: none; }
+.ps-tab {
+  padding: 14px 22px;
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  border: none; background: transparent;
+  border-bottom: 2.5px solid transparent;
+  color: var(--v5-dim);
+  transition: color 0.18s, border-color 0.18s;
+  font-family: 'Heebo', sans-serif;
+}
+.ps-tab:hover { color: var(--v5-ink); }
+.ps-tab.active {
+  color: var(--v5-ink); border-bottom-color: var(--v5-cobalt); font-weight: 700;
+}
+.ps-tab .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: 0.12em;
+  color: var(--v5-faint); margin-inline-start: 6px;
+}
+/* ---- Content area ---- */
+.ps-content { max-width: 980px; margin: 0 auto; padding: 40px 32px 80px; }
+/* ---- Cards ---- */
+.ps-card {
+  background: var(--v5-paper);
+  border: 1.5px solid var(--v5-ink);
+  padding: 22px 24px;
+  box-shadow: 5px 6px 0 var(--v5-ink);
+  margin-bottom: 20px;
+}
+.ps-card-sm {
+  border: 1px solid var(--v5-line-2, rgba(17,17,13,0.18));
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.ps-card h3 {
+  font-size: 14px; font-weight: 700; margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+.ps-card h3 .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.06em;
+  color: var(--v5-dim); margin-inline-start: 8px; font-weight: 400;
+}
+/* ---- Stats grid ---- */
+.ps-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px; margin-bottom: 32px;
+}
+.ps-stat {
+  border: 1.5px solid var(--v5-ink);
+  padding: 18px 16px;
+  box-shadow: 4px 4px 0 var(--v5-ink);
+}
+.ps-stat-n {
+  font-size: 42px; font-weight: 900; letter-spacing: -0.04em;
+  line-height: 1; margin-bottom: 4px;
+}
+.ps-stat-l { font-size: 11px; color: var(--v5-dim); font-weight: 500; }
+/* ---- Timeline ---- */
+.ps-timeline { list-style: none; padding: 0; margin: 0 0 28px; }
+.ps-timeline li {
+  display: flex; gap: 16px; align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+}
+.ps-timeline li:last-child { border-bottom: none; }
+.ps-timeline-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--v5-dim); letter-spacing: 0.06em;
+  white-space: nowrap; padding-top: 2px; min-width: 72px;
+}
+.ps-timeline-text { font-size: 13.5px; line-height: 1.5; }
+/* ---- Checklist ---- */
+.ps-check { list-style: none; padding: 0; margin: 0; }
+.ps-check li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13.5px; padding: 6px 0;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  line-height: 1.5;
+}
+.ps-check li:last-child { border-bottom: none; }
+.ps-check-icon {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; flex-shrink: 0; padding-top: 3px;
+  color: var(--v5-sage); min-width: 16px;
+}
+/* ---- Block catalog ---- */
+.ps-block-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.ps-block-item {
+  border: 1px solid var(--v5-line-2, rgba(17,17,13,0.18));
+  padding: 14px 14px 12px;
+}
+.ps-block-item-icon {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; margin-bottom: 8px; display: block;
+  color: var(--v5-cobalt);
+}
+.ps-block-item-type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: 0.1em;
+  color: var(--v5-dim); margin-bottom: 4px;
+}
+.ps-block-item-label { font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+.ps-block-item-desc { font-size: 11.5px; color: var(--v5-dim); line-height: 1.45; }
+/* ---- Architecture boxes ---- */
+.ps-arch {
+  display: flex; flex-direction: row; align-items: center;
+  gap: 0; flex-wrap: wrap; margin-bottom: 28px;
+  direction: ltr;
+}
+.ps-arch-node {
+  border: 1.5px solid var(--v5-ink);
+  padding: 10px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.04em;
+  background: var(--v5-paper);
+  white-space: nowrap;
+}
+.ps-arch-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px; color: var(--v5-cobalt); padding: 0 4px;
+}
+/* ---- Functions table ---- */
+.ps-fn-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.ps-fn-table th {
+  text-align: right; font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+  color: var(--v5-dim); padding: 8px 12px;
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.ps-fn-table td {
+  padding: 10px 12px; font-size: 12.5px;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+}
+.ps-fn-table td .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.04em;
+}
+/* ---- Roadmap groups ---- */
+.ps-rm-group { margin-bottom: 32px; }
+.ps-rm-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: 0.2em; font-weight: 700;
+  text-transform: uppercase; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.ps-rm-label::after {
+  content: ''; flex: 1; height: 1px; background: var(--v5-line-2, rgba(17,17,13,0.18));
+}
+.ps-rm-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.ps-rm-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px; margin-bottom: 8px;
+  border: 1px solid var(--v5-line-2, rgba(17,17,13,0.18));
+}
+.ps-rm-item-icon { font-size: 14px; flex-shrink: 0; padding-top: 1px; }
+.ps-rm-item-body { flex: 1; min-width: 0; }
+.ps-rm-item-title { font-size: 13.5px; font-weight: 700; margin-bottom: 2px; }
+.ps-rm-item-desc { font-size: 12px; color: var(--v5-dim); line-height: 1.5; }
+/* ---- Keyboard shortcuts ---- */
+.ps-kbd-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  font-size: 13px;
+}
+.ps-kbd-row:last-child { border-bottom: none; }
+kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.04em;
+  background: var(--v5-ink); color: var(--v5-paper);
+  padding: 2px 7px; border-radius: 4px;
+  display: inline-block;
+}
+/* ---- Section headings ---- */
+.ps-section-head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  font-family: 'JetBrains Mono', monospace; text-transform: uppercase;
+  color: var(--v5-dim); margin: 0 0 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.ps-section-head::after { content: ''; flex: 1; height: 1px; background: var(--v5-line-2, rgba(17,17,13,0.18)); }
+.ps-h2 {
+  font-size: 22px; font-weight: 900; letter-spacing: -0.03em;
+  margin: 0 0 20px;
+}
+.ps-h2 .serif {
+  font-family: 'Instrument Serif', serif; font-style: italic;
+  font-weight: 400; color: var(--v5-cobalt);
+}
+.ps-big-status {
+  display: flex; align-items: center; gap: 12px;
+  font-size: clamp(28px, 5vw, 52px); font-weight: 900; letter-spacing: -0.04em;
+  margin-bottom: 28px; padding: 22px 28px;
+  border: 1.5px solid var(--v5-ink);
+  box-shadow: 6px 7px 0 var(--v5-sage);
+}
+.ps-big-status-check {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--v5-sage); display: flex; align-items: center;
+  justify-content: center; font-size: 18px; flex-shrink: 0;
+  color: var(--v5-paper);
+}
+.ps-next-bullets { list-style: none; padding: 0; margin: 0; }
+.ps-next-bullets li {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  font-size: 13.5px; line-height: 1.5;
+}
+.ps-next-bullets li:last-child { border-bottom: none; }
+.ps-next-n {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 700; color: var(--v5-cobalt);
+  background: rgba(63,109,246,0.1); padding: 1px 7px;
+  flex-shrink: 0; margin-top: 2px;
+}
+/* Bug file refs */
+.ps-bug-file {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.04em;
+  color: var(--v5-rose); background: rgba(211,171,199,0.15);
+  padding: 1px 6px;
+}
+.ps-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: 0.08em;
+  padding: 2px 7px; border-radius: 3px;
+  display: inline-block;
+}
+</style>
+</head>
+<body data-page="project-status">
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.development.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"></script>
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useCallback } = React;
+
+/* ─── Tab definitions ─── */
+const TABS = [
+  { id: 'overview',    label: 'סקירה',           sub: '01' },
+  { id: 'fixes',       label: 'באגים שתוקנו',    sub: '02' },
+  { id: 'editor',      label: 'עורך המאמרים',    sub: '03' },
+  { id: 'sanity',      label: 'חיבור Sanity',    sub: '04' },
+  { id: 'roadmap',     label: 'מה חסר',           sub: '05' },
+];
+
+/* ─── URL-param tab persistence ─── */
+function getInitialTab() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get('tab');
+    if (t && TABS.find(x => x.id === t)) return t;
+  } catch (_) {}
+  return 'overview';
+}
+function setTabParam(id) {
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set('tab', id);
+    window.history.replaceState(null, '', u.toString());
+  } catch (_) {}
+}
+
+/* ─── Hero ─── */
+function Hero() {
+  return (
+    <header className="ps-hero">
+      <div className="ps-hero-bg" />
+      <div className="ps-hero-inner">
+        <div className="ps-eyebrow">nVision AI · Variation E · Newsroom Workbench</div>
+        <h1>
+          <span className="serif">Project</span> Status
+        </h1>
+        <p className="ps-hero-sub">
+          תמונת מצב — 15 במאי 2026 · עורך מאמרים · Sanity sync · Cloudflare Pages
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="ps-live-badge">
+            <span className="ps-live-dot" />
+            המערכת עובדת בלייב — Cloudflare Pages
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ─── Tab strip ─── */
+function TabStrip({ active, onChange }) {
+  return (
+    <nav className="ps-tab-strip" role="tablist">
+      {TABS.map(t => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={active === t.id}
+          className={`ps-tab${active === t.id ? ' active' : ''}`}
+          onClick={() => onChange(t.id)}
+        >
+          {t.label}
+          <span className="mono">{t.sub}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 1 — Overview
+═══════════════════════════════ */
+function TabOverview() {
+  const stats = [
+    { n: '5',  l: 'באגים קריטיים תוקנו', color: 'var(--v5-sage)' },
+    { n: '700', l: 'שורות קוד — Editor', color: 'var(--v5-cobalt)' },
+    { n: '3',   l: 'Pages Functions',    color: 'var(--v5-mustard)' },
+    { n: '11',  l: 'סוגי בלוקים',        color: 'var(--v5-rose)' },
+    { n: '1',   l: 'autosave · 1.5s',    color: 'var(--v5-acid)' },
+  ];
+  const timeline = [
+    { time: '15.05 · בוקר', text: 'תוקן באג orphan call ל-V5CategoryPage שנמחק ב-commit da53a8e.' },
+    { time: '15.05 · צהריים', text: 'תוקן useMemo undefined — alias useV5M לא כלל את useMemo, הוספה.' },
+    { time: '15.05 · אחה"צ', text: 'תוקן SANITY_WRITE_TOKEN placeholder תמיד truthy — השוואה לערך ריאלי.' },
+    { time: '15.05 · ערב', text: 'תוקן \'data-cat\': חסר key ב-V5HotBillboard — object literal שבור.' },
+    { time: '15.05 · לילה', text: 'תוקן {literal}.concat() ב-V5Canvas — הוחלף ב-Object.assign().' },
+  ];
+  const next = [
+    { n: 1, text: 'העלאת תמונות ל-Sanity Assets — כרגע רק URL paste. להוסיף files API endpoint.' },
+    { n: 2, text: 'קריאת מאמרים מ-Sanity בחזרה לרשימה — list-articles.js מוכן, חסר ה-fetch בצד לקוח.' },
+    { n: 3, text: 'הגדרת Sanity schema — ה-dataset עדיין לא מכיר את כל סוגי הבלוקים.' },
+  ];
+
+  return (
+    <div>
+      <div className="ps-big-status">
+        <div className="ps-big-status-check">✓</div>
+        <div>המערכת עובדת <span className="serif">בלייב</span></div>
+      </div>
+
+      <div className="ps-section-head">quick stats</div>
+      <div className="ps-stats">
+        {stats.map(s => (
+          <div className="ps-stat" key={s.l} style={{ borderColor: s.color, boxShadow: `4px 4px 0 ${s.color}` }}>
+            <div className="ps-stat-n" style={{ color: s.color }}>{s.n}</div>
+            <div className="ps-stat-l">{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ps-section-head">מה השתנה היום</div>
+      <ul className="ps-timeline">
+        {timeline.map((e, i) => (
+          <li key={i}>
+            <span className="ps-timeline-time">{e.time}</span>
+            <span className="ps-timeline-text">{e.text}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="ps-section-head">צעדים הבאים מיידיים</div>
+      <ul className="ps-next-bullets">
+        {next.map(item => (
+          <li key={item.n}>
+            <span className="ps-next-n">{item.n}</span>
+            <span>{item.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 2 — Fixes
+═══════════════════════════════ */
+function TabFixes() {
+  const bugs = [
+    {
+      title: 'V5CategoryPage orphan call',
+      file: 'v5-newsroom.jsx',
+      line: '1819',
+      broken: 'הפונקציה V5CategoryPage נמחקה ב-commit da53a8e, אך call site נשאר. JSX נכשל בטעינה עם ReferenceError.',
+      fix: 'הוסרה השורה שקראה ל-V5CategoryPage שלא קיימת. הדף נטען תקין.',
+      color: 'var(--v5-rose)',
+    },
+    {
+      title: 'useMemo undefined',
+      file: 'v5-newsroom.jsx',
+      line: '1543, 1567',
+      broken: 'רק alias useV5M יובא מ-React. useMemo עצמו לא יובא, גרם ל-ReferenceError בזמן ריצה בכל שימוש ב-memo.',
+      fix: 'הוספת useMemo לרשימת ה-imports. כל memo hooks עובדים תקין.',
+      color: 'var(--v5-rose)',
+    },
+    {
+      title: 'SANITY_WRITE_TOKEN placeholder תמיד truthy',
+      file: 'v5-editor.jsx',
+      line: '1371',
+      broken: "הקוד בדק if (SANITY_WRITE_TOKEN) — אך הערך '__SANITY_WRITE_TOKEN__' (placeholder) הוא string לא ריק, ולכן תמיד truthy. ה-editor ניסה לשמור ל-Sanity גם בלי token אמיתי.",
+      fix: "תנאי עודכן ל: token && token !== '__SANITY_WRITE_TOKEN__'. עכשיו נכשל בצורה נקייה.",
+      color: 'var(--v5-mustard)',
+    },
+    {
+      title: "'data-cat': missing key",
+      file: 'v5-newsroom.jsx',
+      line: '780',
+      broken: "V5HotBillboard כלל object literal עם ערך ללא key: { 'data-cat': , onClick: ... }. syntax error מנע parse.",
+      fix: "הוספת הערך החסר ל-data-cat. Object literal תקין.",
+      color: 'var(--v5-mustard)',
+    },
+    {
+      title: '{literal}.concat() על object פשוט',
+      file: 'v5-newsroom.jsx',
+      line: '1066–1067',
+      broken: 'V5Canvas קרא .concat() על plain object — שגיאה כי Object אינו Array. הבניית ה-canvas sections נכשלה.',
+      fix: 'הוחלף ב-Object.assign({}, base, extra). merge עובד תקין.',
+      color: 'var(--v5-sage)',
+    },
+  ];
+
+  return (
+    <div>
+      <div className="ps-h2">
+        <span className="serif">5</span> באגים קריטיים — תוקנו
+      </div>
+      {bugs.map((bug, i) => (
+        <div className="ps-card" key={i} style={{ boxShadow: `5px 6px 0 ${bug.color}`, marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{bug.title}</h3>
+            <span className="ps-bug-file">{bug.file}:{bug.line}</span>
+          </div>
+          <div className="ps-section-head" style={{ marginTop: 12 }}>מה נשבר</div>
+          <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.6, color: 'var(--v5-ink-2)' }}>{bug.broken}</p>
+          <div className="ps-section-head">התיקון</div>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>{bug.fix}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 3 — Editor
+═══════════════════════════════ */
+function TabEditor() {
+  const blocks = [
+    { type: 'paragraph',  icon: '¶',  label: 'פסקה',             desc: 'גוף הטקסט הבסיסי. ברירת מחדל לכל block.' },
+    { type: 'lead',       icon: '◈',  label: 'ליד / פתיח',       desc: 'פסקה גדולה ומודגשת לפתיחת הכתבה.' },
+    { type: 'heading2',   icon: 'H2', label: 'כותרת ראשית',      desc: 'כותרת סעיף H2.' },
+    { type: 'heading3',   icon: 'H3', label: 'כותרת משנה',       desc: 'כותרת תת-סעיף H3.' },
+    { type: 'quote',      icon: '❝',  label: 'ציטוט',            desc: 'ציטוט ממוסגר עם מקור. ישמש pull-quote.' },
+    { type: 'image',      icon: '▣',  label: 'תמונה',            desc: 'URL + כיתוב. העלאה ישירה ל-Assets — בפיתוח.' },
+    { type: 'code',       icon: '</>',label: 'קוד',              desc: 'בלוק קוד עם syntax highlight.' },
+    { type: 'method',     icon: '⬡',  label: 'Prompt Contract',  desc: 'סכמת מתודה מובנית — כותרת, פרמטרים, תוצאה.' },
+    { type: 'compare',    icon: '⇌',  label: 'השוואה',           desc: 'עמודות לפני/אחרי או A vs B.' },
+    { type: 'tldr',       icon: '→',  label: 'TL;DR',            desc: 'תמצית מהירה בתחילת כתבה ארוכה.' },
+    { type: 'callout',    icon: '⚠',  label: 'הערה / Callout',   desc: 'הדגשת מידע חשוב, אזהרה, טיפ.' },
+    { type: 'divider',    icon: '—',  label: 'מפריד',            desc: 'קו אופקי להפרדת חלקים.' },
+  ];
+  const features = [
+    { done: true,  text: 'Drag-to-reorder בלוקים (חצים + כפתורי העברה)' },
+    { done: true,  text: 'Slash menu — הקלדת / פותחת רשימת block types' },
+    { done: true,  text: 'Autosave לאחר 1.5 שניות ב-localStorage' },
+    { done: true,  text: 'Preview-as-template — תצוגה מקדימה מלאה' },
+    { done: true,  text: 'Toast notifications (הצלחה / שגיאה / שמירה)' },
+    { done: true,  text: 'Settings dialog לציון EDITOR_SECRET' },
+    { done: false, text: 'Inline formatting (bold / italic / link)' },
+    { done: false, text: 'Real HTML5 drag-to-reorder (pointer events)' },
+  ];
+  const shortcuts = [
+    { keys: ['/', 'Enter'], desc: 'פתח slash menu לבחירת block type' },
+    { keys: ['Ctrl+S'], desc: 'שמור ידנית ל-localStorage' },
+    { keys: ['Ctrl+Enter'], desc: 'פרסם ל-Sanity (אם EDITOR_SECRET הוגדר)' },
+    { keys: ['↑', '↓'], desc: 'הזזת בלוק למעלה/למטה' },
+    { keys: ['Del'], desc: 'מחיקת בלוק ריק' },
+  ];
+
+  return (
+    <div>
+      <div className="ps-h2">
+        עורך המאמרים — <span className="serif">Block Editor</span>
+      </div>
+
+      <div className="ps-section-head">11 סוגי בלוקים</div>
+      <div className="ps-block-grid">
+        {blocks.map(b => (
+          <div className="ps-block-item" key={b.type}>
+            <span className="ps-block-item-icon">{b.icon}</span>
+            <div className="ps-block-item-type">{b.type}</div>
+            <div className="ps-block-item-label">{b.label}</div>
+            <div className="ps-block-item-desc">{b.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ps-section-head">יכולות העורך</div>
+      <div className="ps-card ps-card-sm" style={{ marginBottom: 28 }}>
+        <ul className="ps-check">
+          {features.map((f, i) => (
+            <li key={i}>
+              <span className="ps-check-icon" style={{ color: f.done ? 'var(--v5-sage)' : 'var(--v5-faint)' }}>
+                {f.done ? '✓' : '○'}
+              </span>
+              <span style={{ color: f.done ? 'var(--v5-ink)' : 'var(--v5-dim)' }}>{f.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="ps-section-head">קיצורי מקלדת</div>
+      <div className="ps-card ps-card-sm">
+        {shortcuts.map((s, i) => (
+          <div className="ps-kbd-row" key={i}>
+            <span>{s.desc}</span>
+            <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              {s.keys.map(k => <kbd key={k}>{k}</kbd>)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 4 — Sanity Integration
+═══════════════════════════════ */
+function TabSanity() {
+  const steps = [
+    {
+      n: '01',
+      title: 'GitHub Secrets',
+      items: [
+        'SANITY_WRITE_TOKEN — write token מה-Sanity dashboard.',
+        'EDITOR_SECRET — סיסמה שרירותית שהדפדפן שולח ב-header X-Editor-Secret.',
+        'CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID — לדפלוי אוטומטי דרך GitHub Actions.',
+      ],
+    },
+    {
+      n: '02',
+      title: 'Cloudflare Pages Env Vars',
+      items: [
+        'SANITY_WRITE_TOKEN — אותו token, מוגדר ב-Pages Settings → Environment Variables.',
+        'EDITOR_SECRET — חייב להיות זהה לערך שב-GitHub Secret.',
+        'SANITY_PROJECT_ID — מזהה הפרויקט ב-Sanity (נמצא ב-manage.sanity.io).',
+        'SANITY_DATASET — בד"כ "production".',
+      ],
+    },
+    {
+      n: '03',
+      title: 'הגדרת הדפדפן',
+      items: [
+        'בעורך — לחץ ⚙ Settings בסרגל העליון.',
+        'הדבק את ה-EDITOR_SECRET (מה-GitHub Secret).',
+        'שמור. כעת כפתור "פרסם ל-Sanity" יהיה פעיל.',
+      ],
+    },
+  ];
+
+  const fns = [
+    { name: 'save-article.js',   method: 'POST',   params: 'JSON body: { article }  +  X-Editor-Secret header',  resp: '{ ok: true, id }  או  { error }' },
+    { name: 'delete-article.js', method: 'DELETE', params: '?id=<articleId>  +  X-Editor-Secret header',          resp: '{ ok: true }  או  { error }' },
+    { name: 'list-articles.js',  method: 'GET',    params: 'ללא גוף. X-Editor-Secret header',                    resp: '{ articles: [...] }' },
+  ];
+
+  return (
+    <div>
+      <div className="ps-h2">
+        <span className="serif">Sanity</span> Integration
+      </div>
+
+      <div className="ps-section-head">ארכיטקטורה</div>
+      <div className="ps-card" style={{ marginBottom: 28, padding: '20px 20px 16px' }}>
+        <div className="ps-arch">
+          <div className="ps-arch-node" style={{ background: 'rgba(63,109,246,0.1)', borderColor: 'var(--v5-cobalt)' }}>Browser</div>
+          <span className="ps-arch-arrow">→</span>
+          <div className="ps-arch-node" style={{ fontSize: 9 }}>
+            POST /api/save-article<br />
+            <span style={{ opacity: 0.6 }}>X-Editor-Secret</span>
+          </div>
+          <span className="ps-arch-arrow">→</span>
+          <div className="ps-arch-node" style={{ background: 'rgba(200,216,90,0.15)', borderColor: 'var(--v5-mustard)' }}>
+            Cloudflare Pages<br />
+            <span style={{ fontSize: 9, opacity: 0.7 }}>Function (holds token)</span>
+          </div>
+          <span className="ps-arch-arrow">→</span>
+          <div className="ps-arch-node" style={{ background: 'rgba(136,168,132,0.15)', borderColor: 'var(--v5-sage)' }}>Sanity API</div>
+        </div>
+        <p style={{ margin: '14px 0 0', fontSize: 12, color: 'var(--v5-dim)', direction: 'rtl' }}>
+          ה-write token <strong>לא נחשף לדפדפן</strong> — הוא יושב רק ב-Cloudflare Pages environment.
+          הדפדפן מאמת עם EDITOR_SECRET בלבד.
+        </p>
+      </div>
+
+      <div className="ps-section-head">הגדרה — 3 שלבים</div>
+      {steps.map(s => (
+        <div className="ps-card" key={s.n} style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--v5-cobalt)', fontWeight: 700, letterSpacing: '0.12em' }}>{s.n}</span>
+            <h3 style={{ margin: 0, fontSize: 15 }}>{s.title}</h3>
+          </div>
+          <ul className="ps-check">
+            {s.items.map((item, i) => (
+              <li key={i}>
+                <span className="ps-check-icon">→</span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.55 }}>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      <div className="ps-section-head">3 Pages Functions</div>
+      <div className="ps-card" style={{ padding: '4px 0 4px' }}>
+        <table className="ps-fn-table">
+          <thead>
+            <tr>
+              <th>קובץ</th>
+              <th>Method</th>
+              <th>פרמטרים</th>
+              <th>תגובה</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fns.map(f => (
+              <tr key={f.name}>
+                <td><span className="mono">{f.name}</span></td>
+                <td><span className="mono" style={{ color: 'var(--v5-cobalt)' }}>{f.method}</span></td>
+                <td style={{ fontSize: 11.5 }}>{f.params}</td>
+                <td style={{ fontSize: 11.5, color: 'var(--v5-dim)' }}>{f.resp}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 5 — Roadmap
+═══════════════════════════════ */
+function TabRoadmap() {
+  const groups = [
+    {
+      id: 'critical',
+      label: 'קריטי',
+      dotColor: 'var(--v5-rose)',
+      items: [
+        {
+          icon: '▣',
+          title: 'העלאת תמונות ל-Sanity Assets',
+          desc: 'כרגע העורך מקבל URL בלבד. יש לממש Sanity Files API endpoint ב-Pages Function ולהוסיף כפתור upload בבלוק image.',
+        },
+        {
+          icon: '↓',
+          title: 'קריאת מאמרים מ-Sanity',
+          desc: 'list-articles.js מוכן ומחזיר רשימה. חסר הצד הלקוחי — fetch ב-V5ArticlesList, merge עם localStorage, הצגת מאמרים מרוחקים.',
+        },
+        {
+          icon: '⟳',
+          title: 'EDITOR_SECRET rotation flow',
+          desc: 'כשמחליפים את ה-secret, צריך לעדכן גם ב-Cloudflare Pages וגם בכל דפדפן שמשתמש ב-Settings. אין UI לכך. צריך flow ברור.',
+        },
+      ],
+    },
+    {
+      id: 'important',
+      label: 'חשוב',
+      dotColor: 'var(--v5-mustard)',
+      items: [
+        {
+          icon: 'B',
+          title: 'Inline formatting — Bold / Italic / Link',
+          desc: 'כרגע הפסקאות הן plain text. יש לממש contenteditable עם execCommand או custom toolbar לעיצוב פנים-בלוק.',
+        },
+        {
+          icon: '⬡',
+          title: 'Sanity schema definitions',
+          desc: 'ה-dataset עדיין לא מכיר את blockTypes המותאמים (method, compare, tldr, callout). יש לייצא schema מ-sanity.config.ts.',
+        },
+        {
+          icon: '⚠',
+          title: 'Error boundary על העורך',
+          desc: 'כשיש crash ב-block component, כל העורך קורס. יש לעטוף כל בלוק ב-React Error Boundary ולאפשר recovery.',
+        },
+      ],
+    },
+    {
+      id: 'nice',
+      label: 'נחמד',
+      dotColor: 'var(--v5-sage)',
+      items: [
+        {
+          icon: '≡',
+          title: 'leaderboard-strip (מ-Variation A)',
+          desc: 'סרגל דירוג אופקי עם תמונות + ציונים. מתאים לכתבות "הטובים ביותר".',
+        },
+        {
+          icon: '◉',
+          title: 'stat-card + process-grid (מ-Variation D)',
+          desc: 'כרטיסי נתונים גדולים עם מספר + תיאור, ורשת שלבים ממוספרת לתהליכים.',
+        },
+        {
+          icon: '💬',
+          title: 'chat-bubble (מ-Variation C)',
+          desc: 'בלוק שיחה עם assistant/user — מושלם לכתבות על prompt engineering.',
+        },
+        {
+          icon: '⇌',
+          title: 'bento-compare (מ-Variation A)',
+          desc: 'Bento grid בסגנון A להשוואת מוצרים/כלים בפורמט ויזואלי.',
+        },
+        {
+          icon: '⠿',
+          title: 'Real HTML5 drag-to-reorder',
+          desc: 'החלפת כפתורי ↑↓ ב-draggable handles עם pointer events / HTML5 DnD API.',
+        },
+      ],
+    },
+  ];
+
+  return (
+    <div>
+      <div className="ps-h2">
+        <span className="serif">Roadmap</span> — מה חסר
+      </div>
+
+      {groups.map(g => (
+        <div className="ps-rm-group" key={g.id}>
+          <div className="ps-rm-label">
+            <span className="ps-rm-dot" style={{ background: g.dotColor }} />
+            {g.label}
+          </div>
+          {g.items.map((item, i) => (
+            <div className="ps-rm-item" key={i}>
+              <div className="ps-rm-item-icon" style={{ color: g.dotColor, fontFamily: 'JetBrains Mono, monospace' }}>
+                {item.icon}
+              </div>
+              <div className="ps-rm-item-body">
+                <div className="ps-rm-item-title">{item.title}</div>
+                <div className="ps-rm-item-desc">{item.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   Root component
+═══════════════════════════════ */
+function V5ProjectStatus() {
+  const [tab, setTab] = useState(getInitialTab);
+
+  const handleTab = useCallback((id) => {
+    setTab(id);
+    setTabParam(id);
+  }, []);
+
+  const content = {
+    overview: <TabOverview />,
+    fixes:    <TabFixes />,
+    editor:   <TabEditor />,
+    sanity:   <TabSanity />,
+    roadmap:  <TabRoadmap />,
+  };
+
+  return (
+    <div className="ps-root">
+      <Hero />
+      <TabStrip active={tab} onChange={handleTab} />
+      <main className="ps-content">
+        {content[tab] || <TabOverview />}
+      </main>
+    </div>
+  );
+}
+
+/* ─── Mount ─── */
+const _psRoot = ReactDOM.createRoot(document.getElementById('root'));
+_psRoot.render(React.createElement(V5ProjectStatus));
+</script>
+<script defer src="/tabs.js"></script>
+</body>
+</html>

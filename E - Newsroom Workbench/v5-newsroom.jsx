@@ -286,27 +286,51 @@ function getArticleFromLocal(slug) {
   return loadArticles().find(a => a.slug === slug) || null;
 }
 
-// Sanity API helpers
-var SANITY_PROJECT = 'edmzm8yr';
-var SANITY_DATASET = 'production';
-var SANITY_API_VERSION = '2024-01-01';
-var SANITY_WRITE_TOKEN = ''; // Set via env config or leave empty for local-only
+// Sanity public config — replaced at build time by .github/scripts/inject-env.js.
+// The WRITE token is intentionally NOT here; writes go through /api/save-article
+// (a Cloudflare Pages Function) which keeps the write token server-side.
+var SANITY_PROJECT = '__SANITY_PROJECT_ID__';
+var SANITY_DATASET = '__SANITY_DATASET__';
+var SANITY_API_VERSION = '__SANITY_API_VERSION__';
+var SANITY_READ_TOKEN = '__SANITY_READ_TOKEN__';
 
-try {
-  // Try to read from env config if available
-  var _env = document.getElementById('_sanity_env');
-  if (_env) {
-    SANITY_WRITE_TOKEN = _env.dataset.writeToken || '';
-  }
-} catch(e) { /* ignore */ }
+// Treat unreplaced build placeholders as empty (local dev / no CI run)
+function sanityValue(v) {
+  return (typeof v === 'string' && v.indexOf('__') === 0 && v.lastIndexOf('__') === v.length - 2) ? '' : (v || '');
+}
+SANITY_PROJECT       = sanityValue(SANITY_PROJECT);
+SANITY_DATASET       = sanityValue(SANITY_DATASET) || 'production';
+SANITY_API_VERSION   = sanityValue(SANITY_API_VERSION) || '2024-01-01';
+SANITY_READ_TOKEN    = sanityValue(SANITY_READ_TOKEN);
+var SANITY_ENABLED = !!SANITY_PROJECT;
 
-// Read articles from Sanity (optional - used when connected)
+// Editor secret lives in localStorage (one-time setup by the editor user).
+// The browser sends it as X-Editor-Secret to /api/save-article and /api/delete-article;
+// the Pages Function compares it against the EDITOR_SECRET env var.
+function getEditorSecret() {
+  try { return localStorage.getItem('v5_editor_secret') || ''; } catch { return ''; }
+}
+function setEditorSecret(value) {
+  try { localStorage.setItem('v5_editor_secret', value || ''); } catch {}
+}
+
+// Read articles from Sanity (uses read-only token when available)
 async function sanityQueryArticles() {
+  if (!SANITY_ENABLED) return null;
   try {
+    var headers = { 'Content-Type': 'application/json' };
+    if (SANITY_READ_TOKEN) {
+      headers['Authorization'] = 'Bearer ' + SANITY_READ_TOKEN;
+    }
+    var perspective = SANITY_READ_TOKEN ? 'published' : 'preview';
     var url = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
-              '/data/query/' + SANITY_DATASET + '?query=*[_type == "article"]{title, slug, content, _createdAt, _updatedAt}';
-    var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
-    if (!res.ok) return null;
+              '/data/query/' + SANITY_DATASET + '?perspective=' + perspective +
+              '&query=*[_type == "article"]{title, "slug": slug.current, content, publishedAt, _createdAt, _updatedAt}';
+    var res = await fetch(url, { headers: headers });
+    if (!res.ok) {
+      console.warn('Sanity query returned', res.status, res.statusText);
+      return null;
+    }
     var data = await res.json();
     return data.result || [];
   } catch(e) {
@@ -315,9 +339,12 @@ async function sanityQueryArticles() {
   }
 }
 
-// Write article to Sanity (requires write token)
+// Write/create article in Sanity (requires write token)
 async function sanityWriteArticle(doc) {
-  if (!SANITY_WRITE_TOKEN) return null;
+  if (!SANITY_WRITE_TOKEN) {
+    console.warn('Sanity write token not set — skipping write.');
+    return null;
+  }
   try {
     var url = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
               '/data/mutate/' + SANITY_DATASET;
@@ -330,7 +357,11 @@ async function sanityWriteArticle(doc) {
       },
       body: JSON.stringify({ mutations: mutations }),
     });
-    return await res.json();
+    var json = await res.json();
+    if (!res.ok) {
+      console.error('Sanity write error:', json);
+    }
+    return json;
   } catch(e) {
     console.warn('Sanity write failed:', e.message);
     return null;
@@ -348,8 +379,49 @@ async function syncArticleToSanity(article) {
       status: 'published',
       publishedAt: new Date().toISOString(),
     };
-    var result = await sanityWriteArticle(doc);
-    return result;
+    // Try to find existing article by slug first
+    var existing = null;
+    if (SANITY_READ_TOKEN) {
+      var queryUrl = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
+                     '/data/query/' + SANITY_DATASET + '?perspective=published&query=*[_type == "article" && slug.current == "' + encodeURIComponent(article.slug) + '"][0]{_id}';
+      try {
+        var qRes = await fetch(queryUrl, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + SANITY_READ_TOKEN,
+          }
+        });
+        if (qRes.ok) {
+          var qData = await qRes.json();
+          existing = qData.result || null;
+        }
+      } catch(e) { /* proceed with create */ }
+    }
+
+    var url = 'https://' + SANITY_PROJECT + '.api.sanity.io/v' + SANITY_API_VERSION +
+              '/data/mutate/' + SANITY_DATASET;
+    var mutations;
+    if (existing && existing._id) {
+      // Update existing
+      mutations = [{ patch: { id: existing._id, set: doc } }];
+    } else {
+      // Create new
+      mutations = [{ create: { _type: 'article', ...doc } }];
+    }
+
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SANITY_WRITE_TOKEN,
+      },
+      body: JSON.stringify({ mutations: mutations }),
+    });
+    var json = await res.json();
+    if (!res.ok) {
+      console.error('Sanity sync error:', json);
+    }
+    return json;
   } catch(e) {
     console.warn('Sync failed:', e.message);
     return null;
@@ -705,7 +777,7 @@ function V5Newsroom() {
               key: row.rank,
               href: V5_LINKS.articleDemo,
               className: 'v5-hot-row ' + (row.rank <= 2 ? 'is-fire' : '') + ' ' + (row.dir === 'dn' ? 'dn' : ''),
-              'cat-' + row.cat.split(' ')[0]
+              'data-cat': 'cat-' + row.cat.split(' ')[0]
             },
               React.createElement('span', { className: 'v5-hot-rk' }, String(row.rank).padStart(2, '0')),
               React.createElement('div', { className: 'v5-hot-mid' },
@@ -991,8 +1063,8 @@ function V5Canvas() {
       React.createElement('h2', null, 'הכל זורם. ', React.createElement('span', { className: 'serif' }, 'לכל הכיוונים.'))
     ),
     React.createElement('div', { className: 'v5-streams' },
-      React.createElement(V5Stream, { items: V5_CATS.map(function(c) { return { kind: 'cat' }.concat(c); }), dir: 'ltr', speed: '60s', tone: 'cat' }),
-      React.createElement(V5Stream, { items: V5_ARTICLES.map(function(a) { return { kind: 'art' }.concat(a); }), dir: 'rtl', speed: '80s', tone: 'art' }),
+      React.createElement(V5Stream, { items: V5_CATS.map(function(c) { return Object.assign({ kind: 'cat' }, c); }), dir: 'ltr', speed: '60s', tone: 'cat' }),
+      React.createElement(V5Stream, { items: V5_ARTICLES.map(function(a) { return Object.assign({ kind: 'art' }, a); }), dir: 'rtl', speed: '80s', tone: 'art' }),
       React.createElement(V5Stream, { items: V5_QUOTES.map(function(q, i) { return { kind: 'q', q: q, i: i }; }), dir: 'ltr', speed: '100s', tone: 'q' })
     )
   );
@@ -1115,643 +1187,11 @@ function V5Foot() {
 }
 
 // ============== EDITOR COMPONENTS ==============
+// The Notion-style editor, MyArticles list, and reading view live in v5-editor.jsx
+// and attach to window.V5ArticleEditorV2 / V5MyArticlesV2 / V5ArticleViewerV2 / V5RenderArticle.
+// v5-newsroom.jsx only owns the storage helpers (loadArticles, saveArticleToLocal,
+// deleteArticleFromLocal, getArticleFromLocal) used by both the editor and the routing below.
 
-var BLOCK_TYPES = [
-  { type: 'paragraph', label: 'פסקה', icon: '¶', desc: 'טקסט רגיל' },
-  { type: 'heading',   label: 'כותרת', icon: 'H', desc: 'כותרת מקטעת' },
-  { type: 'image',     label: 'תמונה', icon: '🖼', desc: 'URL של תמונה' },
-  { type: 'code',      label: 'קוד',   icon: '</>', desc: 'בלוק קוד' },
-];
-
-function V5EditorBlock(_ref11) {
-  var block = _ref11.block, isFirst = _ref11.isFirst, onUpdate = _ref11.onUpdate, onRemove = _ref11.onRemove, onInsertAfter = _ref11.onInsertAfter, onMoveUp = _ref11.onMoveUp, onMoveDown = _ref11.onMoveDown, onChangeType = _ref11.onChangeType;
-  var textareaRef = useV5R(null);
-
-  // Auto-resize textarea
-  useV5E(function() {
-    var el = textareaRef.current;
-    if (el) {
-      el.style.height = 'auto';
-      el.style.height = el.scrollHeight + 2 + 'px';
-    }
-  }, [block.content]);
-
-  var handleKeyDown = function(e) {
-    // Enter in heading creates new paragraph block
-    if (e.key === 'Enter' && !e.shiftKey && block.type === 'heading') {
-      e.preventDefault();
-      onInsertAfter(block.id);
-      return;
-    }
-    // Backspace on empty block (not the first) removes it
-    if (e.key === 'Backspace' && !block.content && !isFirst) {
-      e.preventDefault();
-      onRemove(block.id);
-    }
-    // Tab in heading cycles level
-    if (e.key === 'Tab' && block.type === 'heading') {
-      e.preventDefault();
-      onChangeType(block.id);
-    }
-    // Enter in paragraph/code just types normally (textarea handles it)
-  };
-
-  var bt = BLOCK_TYPES.find(function(b) { return b.type === block.type; });
-  var icon = bt ? bt.icon : '¶';
-  var label = bt ? bt.label : 'פסקה';
-
-  return React.createElement('div', { className: 'v5-block', 'data-type': block.type },
-    React.createElement('div', { className: 'v5-block-left' },
-      React.createElement('span', { className: 'v5-block-badge ' + block.type }, icon)
-    ),
-    React.createElement('div', { className: 'v5-block-content-wrap' },
-      block.type === 'image' ? React.createElement('input', {
-        ref: textareaRef,
-        className: 'v5-block-url-input',
-        type: 'url',
-        value: block.content,
-        onChange: function(e) { return onUpdate(block.id, e.target.value); },
-        onKeyDown: handleKeyDown,
-        placeholder: 'הדבק URL של תמונה...',
-        dir: 'ltr'
-      }) : block.type === 'code' ? React.createElement('textarea', {
-        ref: textareaRef,
-        className: 'v5-block-code',
-        value: block.content,
-        onChange: function(e) { return onUpdate(block.id, e.target.value); },
-        onKeyDown: handleKeyDown,
-        placeholder: 'הקלד קוד כאן...',
-        rows: 4,
-        dir: 'ltr',
-        spellCheck: false
-      }) : React.createElement('textarea', {
-        ref: textareaRef,
-        className: 'v5-block-textarea',
-        value: block.content,
-        onChange: function(e) { return onUpdate(block.id, e.target.value); },
-        onKeyDown: handleKeyDown,
-        placeholder: block.type === 'heading' ? 'כותרת...' : 'כתוב פה...',
-        dir: block.type === 'heading' ? 'rtl' : 'rtl',
-        spellCheck: true,
-        rows: block.type === 'heading' ? 1 : 3
-      }),
-      block.content && block.type === 'image' ? React.createElement('img', {
-        className: 'v5-block-image-preview',
-        src: block.content,
-        alt: '',
-        onDoubleClick: function() { return onUpdate(block.id, ''); }
-      }) : null
-    ),
-    React.createElement('div', { className: 'v5-block-controls' },
-      React.createElement('button', { className: 'v5-type-btn', onClick: function() { return onChangeType(block.id); }, title: 'החלף סוג' }, icon),
-      React.createElement('button', { className: 'v5-up-btn', onClick: function() { return onMoveUp(block.id); }, disabled: isFirst, title: 'העבר למעלה' }, '↑'),
-      React.createElement('button', { className: 'v5-down-btn', onClick: function() { return onMoveDown(block.id); }, disabled: false, title: 'העבר למטה' }, '↓'),
-      React.createElement('button', { className: 'v5-del-btn', onClick: function() { return onRemove(block.id); }, disabled: isFirst, title: 'מחק' }, '✕')
-    )
-  );
-}
-
-function V5ArticleEditor(_ref12) {
-  var initialData = _ref12.initialData, onSave = _ref12.onSave, onDelete = _ref12.onDelete, onCancel = _ref12.onCancel, saveLabel = _ref12.saveLabel;
-  var _useState9 = useV5S(initialData?.title || '');
-  var title = _useState9[0], setTitle = _useState9[1];
-  var _useState10 = useV5S(initialData?.slug || '');
-  var slug = _useState10[0], setSlug = _useState10[1];
-  var _useState11 = useV5S(initialData?.content && initialData.content.length > 0 ? initialData.content : [{ id: generateId(), type: 'paragraph', content: '' }]);
-  var blocks = _useState11[0], setBlocks = _useState11[1];
-  var _useState12 = useV5S(false);
-  var saving = _useState12[0], setSaving = _useState12[1];
-  var _useState13 = useV5S('');
-  var error = _useState13[0], setError = _useState13[1];
-  var _useState14 = useV5S(false);
-  var saved = _useState14[0], setSaved = _useState14[1];
-  var _useState15 = useV5S(false);
-  var showSanityOption = _useState15[0], setShowSanityOption = _useState15[1];
-
-  // Auto-generate slug from title
-  useV5E(function() {
-    if (title && !initialData?.slug) {
-      var generated = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      setSlug(generated);
-    }
-  }, [title]);
-
-  var addBlock = function(type, afterIndex) {
-    var newBlock = { id: generateId(), type: type, content: '' };
-    var newBlocks = [].concat(blocks);
-    newBlocks.splice(afterIndex + 1, 0, newBlock);
-    setBlocks(newBlocks);
-    setTimeout(function() {
-      var allTextareas = document.querySelectorAll('.v5-editor-blocks textarea');
-      if (allTextareas[afterIndex + 1]) {
-        allTextareas[afterIndex + 1].focus();
-        // Scroll into view
-        allTextareas[afterIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 80);
-  };
-
-  var removeBlock = function(id) {
-    if (blocks.length <= 1) return;
-    setBlocks(blocks.filter(function(b) { return b.id !== id; }));
-  };
-
-  var updateBlock = function(id, content) {
-    setBlocks(blocks.map(function(b) { return b.id === id ? { id: b.id, type: b.type, content: content } : b; }));
-  };
-
-  var moveBlock = function(id, direction) {
-    var idx = blocks.findIndex(function(b) { return b.id === id; });
-    if (idx === -1) return;
-    var newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= blocks.length) return;
-    var newBlocks = [].concat(blocks);
-    var temp = newBlocks[idx];
-    newBlocks[idx] = newBlocks[newIdx];
-    newBlocks[newIdx] = temp;
-    setBlocks(newBlocks);
-  };
-
-  var changeBlockType = function(id) {
-    var idx = blocks.findIndex(function(b) { return b.id === id; });
-    if (idx === -1) return;
-    var typeOrder = ['paragraph', 'heading', 'image', 'code'];
-    var currentIdx = typeOrder.indexOf(blocks[idx].type);
-    var nextType = typeOrder[(currentIdx + 1) % typeOrder.length];
-    setBlocks(blocks.map(function(b) {
-      if (b.id !== id) return b;
-      var content = b.content;
-      if (nextType === 'paragraph') content = content.replace(/^#{1,6}\s/, '').replace(/^>\s/, '');
-      return { id: b.id, type: nextType, content: content };
-    }));
-  };
-
-  var handleSave = function() {
-    setError('');
-    if (!title.trim()) { setError('יש להזין כותרת למאמר'); return; }
-    var finalSlug = slug.trim() || sanitizeSlug(title);
-    if (!finalSlug) { setError('יש להזין slug תקין'); return; }
-    var hasContent = blocks.some(function(b) { return b.content.trim().length > 0; });
-    if (!hasContent) { setError('יש להוסיף לפחות בלוק אחד עם תוכן'); return; }
-
-    setSaving(true);
-    try {
-      var cleanBlocks = blocks.map(function(b) {
-        return { id: b.id, type: b.type, content: b.content || '' };
-      });
-
-      var savedArticle = saveArticleToLocal({
-        title: title.trim(),
-        slug: finalSlug,
-        content: cleanBlocks,
-      });
-
-      setSaved(true);
-      setTimeout(function() { setSaved(false); }, 2500);
-
-      if (onSave) onSave(savedArticle);
-    } catch (err) {
-      setError('שגיאה בשמירה: ' + (err.message || err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  var handleSyncSanity = function() {
-    if (!SANITY_WRITE_TOKEN) {
-      alert('עליך להגדיר טוקן כתיבה ב-Sanity כדי לסנכרן. שנה את SANITY_WRITE_TOKEN בקובץ ה-.env.local');
-      return;
-    }
-    var finalSlug = slug.trim() || sanitizeSlug(title);
-    var syncBlocks = blocks.map(function(b) {
-      if (b.type === 'image') return { _type: 'image', asset: { _type: 'reference', _ref: '' }, alt: b.content || '' };
-      if (b.type === 'code') return { _type: 'code', code: b.content || '', language: 'javascript', filename: '' };
-      if (b.type === 'heading') {
-        var lvl = 2;
-        var m = b.content.match(/^(#{1,6})\s/);
-        if (m) { lvl = m[1].length; }
-        var txt = b.content.replace(/^#{1,6}\s/, '');
-        return { _type: 'block', children: [{ _type: 'span', text: txt, marks: [] }], style: 'h' + lvl, markDefs: [] };
-      }
-      return { _type: 'block', children: [{ _type: 'span', text: b.content || '', marks: [] }], style: 'normal', markDefs: [] };
-    });
-
-    syncArticleToSanity({ title: title.trim(), slug: finalSlug, content: syncBlocks })
-      .then(function(res) {
-        if (res && !res.error) {
-          alert('המאמר סונכרן בהצלחה ל-Sanity!');
-        } else {
-          alert('שגיאה בסנכרון: ' + JSON.stringify(res));
-        }
-      })
-      .catch(function(e) {
-        alert('שגיאה בסנכרון: ' + e.message);
-      });
-  };
-
-  var handleDelete = function() {
-    if (initialData?.slug && confirm('למחוק את המאמר "' + initialData.title + '"? פעולה בלתי הפיכה.')) {
-      deleteArticleFromLocal(initialData.slug);
-      if (onDelete) onDelete();
-    }
-  };
-
-  var addAfterBlock = function(id, type) {
-    var idx = blocks.findIndex(function(b) { return b.id === id; });
-    if (idx === -1) return;
-    addBlock(type, idx);
-  };
-
-  var wordCount = blocks.reduce(function(sum, b) {
-    return sum + (b.content ? b.content.split(/\s+/).filter(function(w) { return w; }).length : 0);
-  }, 0);
-
-  var currentTypeIcon = BLOCK_TYPES.find(function(b) { return b.type === (blocks[blocks.length - 1] || {}).type; });
-
-  return React.createElement('div', { className: 'v5-editor-standalone' },
-    React.createElement('div', { className: 'v5-editor-wrap' },
-      // Header
-      React.createElement('div', { className: 'v5-editor-head' },
-        React.createElement('input', {
-          className: 'v5-editor-title',
-          type: 'text',
-          value: title,
-          onChange: function(e) { return setTitle(e.target.value); },
-          placeholder: 'כותרת המאמר...',
-          dir: 'rtl',
-          spellCheck: true
-        }),
-        React.createElement('div', { className: 'v5-editor-slug-row' },
-          React.createElement('span', null, '/article/'),
-          React.createElement('input', {
-            className: 'v5-editor-slug-input',
-            type: 'text',
-            value: slug,
-            onChange: function(e) { return setSlug(e.target.value); },
-            placeholder: 'my-article',
-            dir: 'ltr',
-            spellCheck: false
-          })
-        ),
-        error && React.createElement('div', { className: 'v5-editor-error' }, error)
-      ),
-
-      // Block toolbar
-      React.createElement('div', { className: 'v5-block-toolbar' },
-        BLOCK_TYPES.map(function(bt) {
-          return React.createElement('button', {
-            key: bt.type,
-            className: 'v5-block-btn ' + (bt.type === 'paragraph' ? 'sage' : bt.type === 'heading' ? 'mustard' : bt.type === 'code' ? 'sky' : 'ghost'),
-            onClick: function() { addAfterBlock(blocks.length - 1, bt.type); }
-          }, bt.icon, ' ', bt.label);
-        })
-      ),
-
-      // Blocks
-      React.createElement('div', { className: 'v5-editor-blocks' },
-        blocks.map(function(block, index) {
-          return React.createElement(V5EditorBlock, {
-            key: block.id,
-            block: block,
-            index: index,
-            isFirst: index === 0,
-            onUpdate: function(id, newContent) { return updateBlock(id, newContent); },
-            onRemove: removeBlock,
-            onMoveUp: function(id) { return moveBlock(id, 'up'); },
-            onMoveDown: function(id) { return moveBlock(id, 'down'); },
-            onChangeType: changeBlockType,
-            onInsertAfter: function(id) { addAfterBlock(id, 'paragraph'); }
-          });
-        })
-      ),
-
-      // Word count
-      React.createElement('div', { style: { textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--v5-dim)', marginBottom: 16 } },
-        wordCount + ' מילים · ' + blocks.length + ' בלוקים'
-      ),
-
-      // Footer
-      React.createElement('div', { className: 'v5-editor-footer' },
-        React.createElement('div', { className: 'v5-editor-actions' },
-          React.createElement('button', { className: 'v5-editor-btn primary', onClick: handleSave, disabled: saving },
-            saving ? 'שומר...' : (saveLabel || 'שמור')
-          ),
-          React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onCancel }, 'ביטול'),
-          initialData?.slug && React.createElement('button', { className: 'v5-editor-btn danger', onClick: handleDelete }, 'מחק')
-        ),
-        React.createElement('div', null,
-          saving && React.createElement('span', { className: 'v5-editor-saving' }, 'שומר...'),
-          saved && React.createElement('span', { className: 'v5-editor-saved show' }, '✓ נשמר')
-        )
-      ),
-
-      // Sanity sync option
-      true && React.createElement('div', {
-        style: {
-          marginTop: 20, padding: 14, border: '1px dashed var(--v5-faint)',
-          borderRadius: 8, fontSize: 12, color: 'var(--v5-dim)', textAlign: 'center'
-        }
-      },
-        React.createElement('button', {
-          className: 'v5-editor-btn ghost',
-          onClick: handleSyncSanity,
-          style: { fontSize: 11, padding: '5px 14px', border: '1px solid var(--v5-sky)', color: 'var(--v5-sky)', background: 'transparent', boxShadow: 'none' }
-        },
-          '📡 סנכרן ל-Sanity'
-        ),
-        React.createElement('div', { style: { marginTop: 6, fontSize: 10 } },
-          'שמירה מקומית + אופציונלית ל-Sanity'
-        )
-      )
-    )
-  );
-}
-
-// ============== MY ARTICLES (List + Management) ==============
-
-function V5MyArticles() {
-  var _useState16 = useV5S([]);
-  var articles = _useState16[0], setArticles = _useState16[1];
-  var _useState17 = useV5S('published');
-  var activeTab = _useState17[0], setActiveTab = _useState17[1];
-  var _useState18 = useV5S('newest');
-  var sortBy = _useState18[0], setSortBy = _useState18[1];
-  var _useState19 = useV5S('');
-  var filterText = _useState19[0], setFilterText = _useState19[1];
-
-  useV5E(function() {
-    var arts = loadArticles();
-    setArticles(arts);
-
-    var refresh = function() {
-      setArticles(loadArticles());
-    };
-    window.addEventListener('v5ArticlesChanged', refresh);
-    return function() { window.removeEventListener('v5ArticlesChanged', refresh); };
-  }, []);
-
-  var stats = useMemo(function() {
-    var published = articles.filter(function(a) { return a.content && a.content.some(function(b) { return b.content; }); });
-    var drafts = articles.filter(function(a) {
-      return !a.content || a.content.length === 0 || a.content.every(function(b) { return !b.content; });
-    });
-    var totalWords = articles.reduce(function(sum, a) {
-      return sum + (a.content ? a.content.reduce(function(s, b) { return s + (b.content ? b.content.split(/\s+/).length : 0); }, 0) : 0);
-    }, 0);
-    return { total: articles.length, published: published.length, drafts: drafts.length, totalWords: totalWords };
-  }, [articles]);
-
-  // Filter and sort
-  var filtered = useMemo(function() {
-    var result = [].concat(articles);
-
-    if (activeTab === 'published') {
-      result = result.filter(function(a) { return a.content && a.content.some(function(b) { return b.content; }); });
-    } else if (activeTab === 'drafts') {
-      result = result.filter(function(a) {
-        return !a.content || a.content.length === 0 || a.content.every(function(b) { return !b.content; });
-      });
-    }
-
-    if (filterText.trim()) {
-      var q = filterText.toLowerCase();
-      result = result.filter(function(a) {
-        return a.title.toLowerCase().includes(q) ||
-               a.slug.toLowerCase().includes(q) ||
-               (a.content && a.content.some(function(b) { return b.content && b.content.toLowerCase().includes(q); }));
-      });
-    }
-
-    if (sortBy === 'newest') result.sort(function(a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); });
-    else if (sortBy === 'oldest') result.sort(function(a, b) { return new Date(a.updatedAt) - new Date(b.updatedAt); });
-    else if (sortBy === 'alpha') result.sort(function(a, b) { return a.title.localeCompare(b.title, 'he'); });
-
-    return result;
-  }, [articles, activeTab, filterText, sortBy]);
-
-  return React.createElement('div', { className: 'v5-editor-section' },
-    // Section Head
-    React.createElement('div', { className: 'v5-editor-section-head' },
-      React.createElement('div', null,
-        React.createElement('h2', null,
-          'עריכת מאמרים ',
-          React.createElement('span', { className: 'serif' }, 'בתוך האתר.')
-        ),
-        React.createElement('p', { style: { marginTop: 8, fontSize: 15, color: 'var(--v5-ink-2)' } },
-          'צרו, ערכו ונהלו מאמרים — בלי לצאת מהאתר. כל המאמרים נשמרים ב-localStorage.'
-        )
-      ),
-      React.createElement('a', { className: 'v5-editor-new-btn', href: 'article.html?action=new' }, '+ מאמר חדש')
-    ),
-
-    // Stats bar
-    React.createElement('div', {
-      style: {
-        display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap',
-        marginBottom: 28, padding: '14px 0', borderBottom: '1px solid var(--v5-line)'
-      }
-    },
-      React.createElement('div', { style: { textAlign: 'center' } },
-        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-ink)' } }, stats.total),
-        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'סך הכל')
-      ),
-      React.createElement('div', { style: { textAlign: 'center' } },
-        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-sage)' } }, stats.published),
-        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'פורסמו')
-      ),
-      React.createElement('div', { style: { textAlign: 'center' } },
-        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-cobalt)' } }, stats.drafts),
-        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'טיוטות')
-      ),
-      React.createElement('div', { style: { textAlign: 'center' } },
-        React.createElement('div', { style: { fontSize: 28, fontWeight: 900, color: 'var(--v5-mustard)' } }, stats.totalWords),
-        React.createElement('div', { style: { fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono' } }, 'מילים')
-      )
-    ),
-
-    // Toolbar
-    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 } },
-      React.createElement('div', { className: 'v5-editor-tabs' },
-        React.createElement('button', {
-          className: 'v5-editor-tab ' + (activeTab === 'published' ? 'active' : ''),
-          onClick: function() { return setActiveTab('published'); }
-        }, 'פורסמו (' + stats.published + ')'),
-        React.createElement('button', {
-          className: 'v5-editor-tab ' + (activeTab === 'drafts' ? 'active' : ''),
-          onClick: function() { return setActiveTab('drafts'); }
-        }, 'טיוטות (' + stats.drafts + ')'),
-        React.createElement('button', {
-          className: 'v5-editor-tab ' + (activeTab === 'all' ? 'active' : ''),
-          onClick: function() { return setActiveTab('all'); }
-        }, 'הכל (' + stats.total + ')')
-      ),
-      React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
-        React.createElement('input', {
-          type: 'text',
-          placeholder: 'חיפוש מאמרים...',
-          value: filterText,
-          onChange: function(e) { return setFilterText(e.target.value); },
-          style: {
-            padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--v5-faint)',
-            background: 'rgba(255,255,255,0.1)', color: 'var(--v5-ink)',
-            fontFamily: 'Heebo, sans-serif', fontSize: 12, width: 160, direction: 'rtl'
-          },
-          dir: 'rtl'
-        }),
-        React.createElement('select', {
-          value: sortBy,
-          onChange: function(e) { return setSortBy(e.target.value); },
-          style: {
-            padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--v5-faint)',
-            background: 'rgba(255,255,255,0.1)', color: 'var(--v5-ink)',
-            fontFamily: 'JetBrains Mono', fontSize: 10, direction: 'rtl'
-          }
-        },
-          React.createElement('option', { value: 'newest' }, 'הכי חדש'),
-          React.createElement('option', { value: 'oldest' }, 'הכי ישן'),
-          React.createElement('option', { value: 'alpha' }, 'אלפביתי')
-        )
-      )
-    ),
-
-    // Article Grid
-    filtered.length === 0 ?
-      React.createElement('div', { className: 'v5-editor-empty' },
-        React.createElement('span', { className: 'v5-editor-empty-icon' },
-          activeTab === 'published' ? '📄' : activeTab === 'drafts' ? '📝' : '📭'
-        ),
-        React.createElement('h3', null,
-          activeTab === 'published' ? 'אין מאמרים פורסמים' :
-          activeTab === 'drafts' ? 'אין טיוטות' :
-          filterText ? 'לא נמצאו תוצאות' : 'אין מאמרים'
-        ),
-        React.createElement('p', null,
-          activeTab === 'published'
-            ? 'תתחיל לכתוב מאמר חדש כדי לראות אותו כאן.'
-            : 'תתחיל לכתוב דברים!'
-        ),
-        React.createElement('a', { className: 'v5-editor-new-btn', href: 'article.html?action=new', style: { marginTop: 16 } },
-          '+ צור מאמר חדש'
-        )
-      )
-    :
-      React.createElement('div', { className: 'v5-editor-grid' },
-        filtered.map(function(article) {
-          var wordCount = article.content
-            ? article.content.reduce(function(sum, b) { return sum + (b.content ? b.content.split(/\s+/).length : 0); }, 0)
-            : 0;
-          var blockTypes = article.content
-            ? article.content.reduce(function(acc, b) { var _a; _a = acc; _a[b.type] = (_a[b.type] || 0) + 1; return _a; }, {})
-            : {};
-
-          return React.createElement('a', {
-            key: article.id,
-            href: 'article.html?action=edit&slug=' + encodeURIComponent(article.slug),
-            className: 'v5-editor-card'
-          },
-            React.createElement('div', { className: 'v5-editor-card-meta' },
-              React.createElement('span', null, new Date(article.updatedAt).toLocaleDateString('he-IL')),
-              React.createElement('span', null, wordCount + ' מילים'),
-              Object.entries(blockTypes).map(function(_ref13) {
-                var type = _ref13[0], count = _ref13[1];
-                return React.createElement('span', { key: type }, count, ' ', type);
-              })
-            ),
-            React.createElement('h3', null, article.title),
-            React.createElement('div', {
-              className: 'v5-editor-card-actions',
-              onClick: function(e) {
-                if (e.target.closest('.v5-del-btn')) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (confirm('למחוק את "' + article.title + '"?')) {
-                    deleteArticleFromLocal(article.slug);
-                  }
-                }
-              }
-            },
-              React.createElement('span', { style: { fontSize: 10.5, color: 'var(--v5-dim)', marginRight: 'auto' } },
-                article.createdAt !== article.updatedAt ? 'נערך ' + new Date(article.updatedAt).toLocaleDateString('he-IL') : 'נוצר ' + new Date(article.createdAt).toLocaleDateString('he-IL')
-              ),
-              React.createElement('a', { href: 'article.html?action=edit&slug=' + encodeURIComponent(article.slug) }, '✏️ ערוך'),
-              React.createElement('a', { href: 'article.html?action=view&slug=' + encodeURIComponent(article.slug) }, '👁 תצוגה'),
-              React.createElement('button', { className: 'v5-del-btn' }, '🗑')
-            )
-          );
-        }),
-
-        // New article card
-        React.createElement('a', { className: 'v5-editor-new-card', href: 'article.html?action=new' },
-          React.createElement('span', { className: 'plus' }, '+'),
-          React.createElement('span', { className: 'label' }, 'מאמר חדש')
-        )
-      )
-  );
-}
-
-// ============== ARTICLE VIEWER ==============
-
-function V5ArticleViewer(_ref14) {
-  var article = _ref14.article, onBack = _ref14.onBack;
-
-  if (!article) {
-    return React.createElement('div', { className: 'v5-editor-standalone' },
-      React.createElement('div', { className: 'v5-editor-wrap' },
-        React.createElement('div', { className: 'v5-editor-error' }, 'מאמר לא נמצא'),
-        React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onBack }, '← חזרה לרשימה')
-      )
-    );
-  }
-
-  return React.createElement('div', { className: 'v5-editor-standalone' },
-    React.createElement('div', { className: 'v5-editor-wrap' },
-      React.createElement('div', { className: 'v5-article-view' },
-        React.createElement('div', { className: 'v5-article-view-head' },
-          React.createElement('h1', null, article.title),
-          React.createElement('div', { className: 'meta' },
-            React.createElement('span', { dir: 'ltr' }, article.slug),
-            ' · ',
-            React.createElement('span', null, 'עודכן: ' + new Date(article.updatedAt).toLocaleDateString('he-IL'))
-          )
-        ),
-        React.createElement('div', {
-          className: 'v5-article-view-body',
-          dangerouslySetInnerHTML: { __html: V5RenderBlocks(article.content) }
-        }),
-        React.createElement('div', { className: 'v5-article-view-actions' },
-          React.createElement('button', { className: 'v5-editor-btn primary', onClick: function() {
-            window.location.href = 'article.html?action=edit&slug=' + encodeURIComponent(article.slug);
-          }}, 'ערוך מאמר ↗'),
-          React.createElement('button', { className: 'v5-editor-btn ghost', onClick: onBack }, '← חזרה')
-        )
-      )
-    )
-  );
-}
-
-function V5RenderBlocks(content) {
-  if (!content || !content.length) return '<p style="color:var(--v5-dim)">אין תוכן</p>';
-  return content.map(function(block) {
-    var text = block.content || '';
-    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-    switch (block.type) {
-      case 'heading':
-        var level = 2;
-        var m = text.match(/^(#{1,6})\s/);
-        if (m) { level = m[1].length; text = text.replace(/^#{1,6}\s/, ''); }
-        escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return '<h2 style="font-size:26px;font-weight:800;margin:28px 0 10px;letter-spacing:-0.02em;direction:rtl;text-align:right">' + escaped + '</h2>';
-      case 'image':
-        if (!text) return '';
-        return '<img src="' + escaped + '" alt="" style="max-width:100%;border-radius:8px;margin:16px 0;max-height:300px;object-fit:cover;display:block" />';
-      case 'code':
-        return '<pre style="background:var(--v5-ink);color:var(--v5-acid);padding:16px;border-radius:8px;overflow-x:auto;margin:16px 0;font-family:JetBrains Mono,monospace;font-size:12px;line-height:1.6;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all"><code>' + escaped + '</code></pre>';
-      default:
-        return '<p style="margin-bottom:16px;line-height:1.8;direction:rtl;text-align:right">' + escaped.replace(/\n/g, '<br/>') + '</p>';
-    }
-  }).join('\n');
-}
 
 // ============== PAGES ==============
 
@@ -1766,7 +1206,6 @@ function V5HomePage() {
     React.createElement(V5Ticker),
     React.createElement(V5Newsroom),
     React.createElement(V5ArticleWall),
-    React.createElement(V5CategoryPage),
     React.createElement(V5ArticleTemplate),
     React.createElement(V5Canvas),
     React.createElement(V5Cta)
@@ -1798,39 +1237,54 @@ function V5ArticlesPage() {
     return function() { window.removeEventListener('popstate', onPopState); };
   }, []);
 
-  // Edit or create article
+  // Edit or create article (V2 editor from v5-editor.jsx)
   if (action === 'edit' || action === 'new') {
     var article = action === 'edit' && slug ? getArticleFromLocal(slug) : null;
-    return React.createElement(V5ArticleEditor, {
+    return React.createElement(window.V5ArticleEditorV2, {
       initialData: article || undefined,
-      onSave: function(saved) {
-        window.location.href = 'articles.html';
-      },
-      onDelete: function() {
-        window.location.href = 'articles.html';
-      },
-      onCancel: function() {
-        window.location.href = 'articles.html';
-      },
-      saveLabel: action === 'new' ? 'יצירת מאמר' : 'שמור שינויים'
+      onSaved: function() { window.location.href = 'articles.html'; },
+      onCancel: function() { window.location.href = 'articles.html'; },
+      onDeleted: function() { window.location.href = 'articles.html'; }
     });
   }
 
-  // View article
+  // View an existing article (V2 viewer from v5-editor.jsx)
   if (action === 'view' && slug) {
     var viewArticle = getArticleFromLocal(slug);
-    return React.createElement(V5ArticleViewer, {
+    return React.createElement(window.V5ArticleViewerV2, {
       article: viewArticle,
       onBack: function() { window.location.href = 'articles.html'; }
     });
   }
 
-  // Default: show article list
-  return React.createElement(V5MyArticles);
+  // Default: my-articles list (V2)
+  return React.createElement(window.V5MyArticlesV2);
 }
 
 function V5ArticlePage() {
-  var view = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'demo' ? 'demo' : 'new';
+  // action= overrides take precedence — so article.html?action=edit&slug=... opens the editor.
+  var params = new URLSearchParams(window.location.search);
+  var action = params.get('action');
+  var slug = params.get('slug') || '';
+
+  if (action === 'edit' || action === 'new') {
+    var article = action === 'edit' && slug ? getArticleFromLocal(slug) : null;
+    return React.createElement(window.V5ArticleEditorV2, {
+      initialData: article || undefined,
+      onSaved: function() { window.location.href = 'articles.html'; },
+      onCancel: function() { window.location.href = 'articles.html'; },
+      onDeleted: function() { window.location.href = 'articles.html'; }
+    });
+  }
+  if (action === 'view' && slug) {
+    return React.createElement(window.V5ArticleViewerV2, {
+      article: getArticleFromLocal(slug),
+      onBack: function() { window.location.href = 'articles.html'; }
+    });
+  }
+
+  // No action — show the design-reference template (new or demo).
+  var view = params.get('view') === 'demo' ? 'demo' : 'new';
   return React.createElement(React.Fragment, null,
     React.createElement(V5Ticker),
     React.createElement(V5ArticleTemplate, { mode: view }),
