@@ -1289,6 +1289,157 @@ function V5HomePage() {
   );
 }
 
+// ---- Articles list with search + pagination ----
+var V5_ARTICLES_PAGE_SIZE = 12;
+
+function V5ArticlesBrowser() {
+  // Search state
+  var _q = useV5S('');
+  var q = _q[0], setQ = _q[1];
+  var _qLive = useV5S('');
+  var qLive = _qLive[0], setQLive = _qLive[1];
+
+  var _page = useV5S(0);
+  var page = _page[0], setPage = _page[1];
+
+  var _items = useV5S([]);
+  var items = _items[0], setItems = _items[1];
+  var _total = useV5S(0);
+  var total = _total[0], setTotal = _total[1];
+  var _loading = useV5S(true);
+  var loading = _loading[0], setLoading = _loading[1];
+  var _err = useV5S('');
+  var err = _err[0], setErr = _err[1];
+
+  // Debounce search input → q
+  useV5E(function() {
+    var t = setTimeout(function() { setQ(qLive.trim()); setPage(0); }, 280);
+    return function() { clearTimeout(t); };
+  }, [qLive]);
+
+  // Fetch results when q or page changes
+  useV5E(function() {
+    var aborted = false;
+    setLoading(true);
+    setErr('');
+    var offset = page * V5_ARTICLES_PAGE_SIZE;
+    var url = '/api/search?type=article&limit=' + V5_ARTICLES_PAGE_SIZE + '&offset=' + offset
+      + (q ? '&q=' + encodeURIComponent(q) : '');
+    fetch(url).then(function(r) { return r.ok ? r.json() : null; }).then(function(j) {
+      if (aborted) return;
+      if (!j || !j.ok) {
+        setItems([]); setTotal(0); setErr('שגיאת חיפוש'); setLoading(false); return;
+      }
+      setItems(j.results || []);
+      setTotal(j.total || 0);
+      setLoading(false);
+    }).catch(function() {
+      if (aborted) return;
+      setItems([]); setTotal(0); setErr('שגיאת רשת'); setLoading(false);
+    });
+    return function() { aborted = true; };
+  }, [q, page]);
+
+  var totalPages = Math.max(1, Math.ceil(total / V5_ARTICLES_PAGE_SIZE));
+  var hasPrev = page > 0;
+  var hasNext = (page + 1) < totalPages;
+
+  function openArticle(it) {
+    var slug = it.slug || it._id;
+    window.location.href = 'articles.html?action=view&slug=' + encodeURIComponent(slug);
+  }
+  function newArticle() {
+    window.location.href = 'articles.html?action=new';
+  }
+
+  // Cards
+  var cards = items.map(function(it) {
+    var title = it.title || it.headline || '(ללא כותרת)';
+    var preview = it.excerpt || it.dek || it.bodyPreview || '';
+    var dateStr = it.publishedAt || it._updatedAt;
+    var dateLabel = dateStr ? new Date(dateStr).toLocaleDateString('he-IL') : '';
+    return React.createElement('article', {
+      key: it._id,
+      className: 'v5-news-card is-grid',
+      role: 'button',
+      tabIndex: 0,
+      onClick: function() { openArticle(it); },
+      onKeyDown: function(e) { if (e.key === 'Enter') openArticle(it); },
+    },
+      React.createElement('div', { className: 'v5-news-meta' },
+        React.createElement('span', { className: 'v5-news-cat' }, 'מאמר'),
+        dateLabel && React.createElement('span', { className: 'v5-news-time mono' }, dateLabel)
+      ),
+      React.createElement('h3', { className: 'v5-news-headline' }, title),
+      preview && React.createElement('p', { className: 'v5-news-dek' },
+        preview.length > 180 ? preview.slice(0, 180) + '…' : preview
+      )
+    );
+  });
+
+  return React.createElement('section', { className: 'v5-news-page' },
+    React.createElement('header', { className: 'v5-news-head' },
+      React.createElement('div', null,
+        React.createElement('p', { className: 'v5-eyebrow mono' }, 'NEWSROOM · ARTICLES'),
+        React.createElement('h1', { className: 'v5-news-title' }, 'מאמרים'),
+        React.createElement('p', { className: 'v5-news-sub' },
+          total > 0 ? (total + ' מאמרים' + (q ? ' תואמים ל-"' + q + '"' : '')) : (loading ? 'טוען…' : (q ? 'אין תוצאות' : 'אין מאמרים עדיין'))
+        )
+      ),
+      React.createElement('div', { className: 'v5-news-view-toggle', style: { gap: 8 } },
+        React.createElement('input', {
+          type: 'search',
+          className: 'v5-news-search-input',
+          placeholder: 'חיפוש מאמרים...',
+          value: qLive,
+          onChange: function(e) { setQLive(e.target.value); },
+          style: {
+            padding: '8px 12px', borderRadius: 6, border: '1px solid var(--v5-line, #ccc)',
+            background: 'var(--v5-paper, #fff)', color: 'var(--v5-ink, #1a1a1a)',
+            minWidth: 180, fontFamily: 'inherit', fontSize: 14, direction: 'rtl',
+          },
+        }),
+        React.createElement('button', {
+          type: 'button',
+          className: 'v5-news-view-btn is-active',
+          onClick: newArticle,
+        }, '+ חדש')
+      )
+    ),
+    err && React.createElement('p', { className: 'v5-news-sub', style: { color: '#c0392b' } }, err),
+    React.createElement('div', { className: 'v5-news-feed v5-news-feed-grid' }, cards),
+    !loading && total === 0 && !err && React.createElement('p', {
+      className: 'v5-news-sub',
+      style: { textAlign: 'center', padding: '32px 0' },
+    }, q ? 'אין מאמרים שתואמים לחיפוש.' : 'עדיין אין מאמרים. לחץ "+ חדש" כדי להתחיל.'),
+    totalPages > 1 && React.createElement('nav', {
+      className: 'v5-news-pagination',
+      style: {
+        display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12,
+        padding: '24px 0', flexWrap: 'wrap',
+      },
+    },
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-view-btn',
+        disabled: !hasPrev,
+        onClick: function() { if (hasPrev) setPage(page - 1); },
+        style: { opacity: hasPrev ? 1 : 0.4 },
+      }, '‹ הקודם'),
+      React.createElement('span', { className: 'mono', style: { fontSize: 13 } },
+        'עמוד ' + (page + 1) + ' מתוך ' + totalPages
+      ),
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-view-btn',
+        disabled: !hasNext,
+        onClick: function() { if (hasNext) setPage(page + 1); },
+        style: { opacity: hasNext ? 1 : 0.4 },
+      }, 'הבא ›')
+    )
+  );
+}
+
 function V5ArticlesPage() {
   // Read URL params on initial render (lazy init to avoid flash)
   var _useState20 = useV5S(function() {
@@ -1334,8 +1485,8 @@ function V5ArticlesPage() {
     });
   }
 
-  // Default: my-articles list (V2)
-  return React.createElement(window.V5MyArticlesV2);
+  // Default: paginated, searchable browser (Sanity-backed).
+  return React.createElement(V5ArticlesBrowser);
 }
 
 // ============== NEWS PAGE ==============
@@ -1541,6 +1692,9 @@ function V5NewsModal(_ref2) {
   );
 }
 
+var V5_NEWS_PAGE_SIZE = 12;
+var V5_NEWS_CATEGORIES = ['breaking', 'update', 'analysis', 'release', 'rumor', 'guide-short'];
+
 function V5NewsPage() {
   var _v = useV5S('timeline');
   var view = _v[0], setView = _v[1];
@@ -1551,19 +1705,72 @@ function V5NewsPage() {
   var _modal = useV5S(null);
   var modalItem = _modal[0], setModalItem = _modal[1];
 
+  // Search + filter + paginate
+  var _qLive = useV5S('');
+  var qLive = _qLive[0], setQLive = _qLive[1];
+  var _q = useV5S('');
+  var q = _q[0], setQ = _q[1];
+  var _cat = useV5S('');
+  var cat = _cat[0], setCat = _cat[1];
+  var _page = useV5S(0);
+  var page = _page[0], setPage = _page[1];
+  var _total = useV5S(0);
+  var total = _total[0], setTotal = _total[1];
+
+  // Debounce typed query → committed q (reset page)
+  useV5E(function() {
+    var t = setTimeout(function() { setQ(qLive.trim()); setPage(0); }, 280);
+    return function() { clearTimeout(t); };
+  }, [qLive]);
+
+  // Fetch data: when search/filter/paging is active, use /api/search; otherwise the cheap /api/list-news.
   useV5E(function() {
     var aborted = false;
-    fetch('/api/list-news').then(function(r) {
-      return r.ok ? r.json() : null;
-    }).then(function(j) {
-      if (aborted || !j) return;
-      if (Array.isArray(j.news) && j.news.length) {
-        setItems(j.news);
-        setStatus('live');
-      }
-    }).catch(function() { /* keep fallback */ });
+    var useSearch = !!(q || cat || page > 0);
+    if (useSearch) {
+      var offset = page * V5_NEWS_PAGE_SIZE;
+      var url = '/api/search?type=news&limit=' + V5_NEWS_PAGE_SIZE + '&offset=' + offset
+        + (q ? '&q=' + encodeURIComponent(q) : '')
+        + (cat ? '&category=' + encodeURIComponent(cat) : '');
+      fetch(url).then(function(r) { return r.ok ? r.json() : null; }).then(function(j) {
+        if (aborted || !j || !j.ok) return;
+        // Normalize results — search endpoint returns bodyPreview instead of body.
+        var normalized = (j.results || []).map(function(it) {
+          var o = Object.assign({}, it);
+          if (!o.body && o.bodyPreview) o.body = o.bodyPreview;
+          return o;
+        });
+        setItems(normalized);
+        setTotal(j.total || 0);
+        setStatus(normalized.length ? 'live' : 'empty');
+      }).catch(function() { /* keep prior */ });
+    } else {
+      fetch('/api/list-news').then(function(r) {
+        return r.ok ? r.json() : null;
+      }).then(function(j) {
+        if (aborted || !j) return;
+        if (Array.isArray(j.news) && j.news.length) {
+          var firstPage = j.news.slice(0, V5_NEWS_PAGE_SIZE);
+          setItems(firstPage);
+          setTotal(j.news.length);
+          setStatus('live');
+        } else {
+          // keep fallback demo data; total = fallback length
+          setTotal(V5_NEWS_FALLBACK.length);
+        }
+      }).catch(function() { /* keep fallback */ });
+    }
     return function() { aborted = true; };
-  }, []);
+  }, [q, cat, page]);
+
+  var totalPages = Math.max(1, Math.ceil(total / V5_NEWS_PAGE_SIZE));
+  var hasPrev = page > 0;
+  var hasNext = (page + 1) < totalPages;
+
+  function selectCategory(next) {
+    setCat(next === cat ? '' : next);
+    setPage(0);
+  }
 
   return React.createElement('section', { className: 'v5-news-page' },
     React.createElement('header', { className: 'v5-news-head' },
@@ -1572,9 +1779,24 @@ function V5NewsPage() {
         React.createElement('h1', { className: 'v5-news-title' }, 'מה חדש עכשיו'),
         React.createElement('p', { className: 'v5-news-sub' }, status === 'demo'
           ? 'דמו — חבר Sanity דרך /api/list-news לפיד אמיתי.'
-          : 'פיד חי, מתעדכן אוטומטית מ-Sanity.')
+          : (status === 'empty' ? 'אין תוצאות לחיפוש זה.' : 'פיד חי, מתעדכן אוטומטית מ-Sanity.'))
       ),
-      React.createElement('div', { className: 'v5-news-view-toggle' },
+      React.createElement('div', {
+        className: 'v5-news-view-toggle',
+        style: { gap: 8, flexWrap: 'wrap', alignItems: 'center' },
+      },
+        React.createElement('input', {
+          type: 'search',
+          className: 'v5-news-search-input',
+          placeholder: 'חיפוש חדשות...',
+          value: qLive,
+          onChange: function(e) { setQLive(e.target.value); },
+          style: {
+            padding: '8px 12px', borderRadius: 6, border: '1px solid var(--v5-line, #ccc)',
+            background: 'var(--v5-paper, #fff)', color: 'var(--v5-ink, #1a1a1a)',
+            minWidth: 180, fontFamily: 'inherit', fontSize: 14, direction: 'rtl',
+          },
+        }),
         React.createElement('button', {
           type: 'button',
           className: 'v5-news-view-btn' + (view === 'timeline' ? ' is-active' : ''),
@@ -1587,6 +1809,26 @@ function V5NewsPage() {
         }, 'Grid')
       )
     ),
+    React.createElement('div', {
+      className: 'v5-news-cat-chips',
+      style: {
+        display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 0 16px', justifyContent: 'flex-end',
+      },
+    },
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-view-btn' + (!cat ? ' is-active' : ''),
+        onClick: function() { selectCategory(''); },
+      }, 'הכל'),
+      V5_NEWS_CATEGORIES.map(function(c) {
+        return React.createElement('button', {
+          key: c,
+          type: 'button',
+          className: 'v5-news-view-btn' + (cat === c ? ' is-active' : ''),
+          onClick: function() { selectCategory(c); },
+        }, V5_CATEGORY_LABELS[c] || c);
+      })
+    ),
     React.createElement('div', { className: 'v5-news-feed v5-news-feed-' + view },
       items.map(function(item) {
         return React.createElement(V5NewsCard, {
@@ -1596,6 +1838,35 @@ function V5NewsPage() {
           onOpenPopup: setModalItem,
         });
       })
+    ),
+    items.length === 0 && React.createElement('p', {
+      className: 'v5-news-sub',
+      style: { textAlign: 'center', padding: '32px 0' },
+    }, 'אין פריטים להציג.'),
+    totalPages > 1 && React.createElement('nav', {
+      className: 'v5-news-pagination',
+      style: {
+        display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12,
+        padding: '24px 0', flexWrap: 'wrap',
+      },
+    },
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-view-btn',
+        disabled: !hasPrev,
+        onClick: function() { if (hasPrev) setPage(page - 1); },
+        style: { opacity: hasPrev ? 1 : 0.4 },
+      }, '‹ הקודם'),
+      React.createElement('span', { className: 'mono', style: { fontSize: 13 } },
+        'עמוד ' + (page + 1) + ' מתוך ' + totalPages
+      ),
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-view-btn',
+        disabled: !hasNext,
+        onClick: function() { if (hasNext) setPage(page + 1); },
+        style: { opacity: hasNext ? 1 : 0.4 },
+      }, 'הבא ›')
     ),
     modalItem && React.createElement(V5NewsModal, { item: modalItem, onClose: function() { setModalItem(null); } })
   );

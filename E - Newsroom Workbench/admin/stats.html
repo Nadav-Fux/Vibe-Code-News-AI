@@ -6,6 +6,129 @@
 <title>nVision Studio · סטטיסטיקות</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="admin.css"/>
+<style>
+  /* stats-only inline styles — no new CSS files */
+  .stats-section {
+    margin-top: 28px;
+  }
+  .stats-section h2 {
+    margin: 0 0 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--admin-dim);
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .stats-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 980px) {
+    .stats-two-col { grid-template-columns: 1fr; }
+  }
+  .stats-panel {
+    border: 1.5px solid var(--admin-line-2);
+    background: var(--admin-bg-2);
+    padding: 18px 20px;
+  }
+  .stats-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--admin-line);
+  }
+  .stats-panel-head h3 {
+    margin: 0;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .stats-panel-head .stats-panel-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--admin-dim);
+    text-transform: uppercase;
+  }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 36px;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
+  }
+  .bar-row .bar-label {
+    color: var(--admin-ink-2);
+    font-weight: 500;
+  }
+  .bar-row .bar-count {
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--admin-dim);
+  }
+  .bar-track {
+    height: 14px;
+    background: var(--admin-bg);
+    border: 1px solid var(--admin-line);
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--admin-accent);
+    transition: width 0.4s ease;
+  }
+  .bar-fill.is-zero { background: transparent; }
+  .day-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--admin-line);
+    font-size: 13px;
+  }
+  .day-row:last-child { border-bottom: 0; }
+  .day-row .day-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--admin-ink-2);
+  }
+  .day-row.is-empty .day-label,
+  .day-row.is-empty .day-counts { color: var(--admin-dim); opacity: 0.55; }
+  .day-counts {
+    display: flex;
+    gap: 14px;
+    font-size: 12.5px;
+    color: var(--admin-dim);
+  }
+  .day-counts strong { color: var(--admin-ink); font-weight: 700; }
+  .stats-error {
+    padding: 16px;
+    border: 1px dashed var(--admin-danger);
+    background: rgba(231, 76, 60, 0.06);
+    color: var(--admin-danger);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .feed-table-link {
+    color: var(--admin-ink);
+    text-decoration: none;
+  }
+  .feed-table-link:hover { text-decoration: underline; }
+  .feed-table tr { cursor: pointer; }
+</style>
 </head>
 <body>
 <div class="admin-shell">
@@ -14,7 +137,10 @@
       <div class="admin-brand-mark">n.</div>
       <div class="admin-brand-name"><strong>nVision Studio</strong><span>VIBE CODE NEWS · STUDIO</span></div>
     </div>
-    <div class="admin-top-right"><a href="../index.html">← חזרה לאתר</a></div>
+    <div class="admin-top-right">
+      <a href="../index.html">← חזרה לאתר</a>
+      <a href="../news.html">פיד חדשות</a>
+    </div>
   </header>
   <div class="admin-body">
     <nav class="admin-nav" data-admin-nav></nav>
@@ -24,21 +150,320 @@
           <p class="eyebrow">ANALYTICS</p>
           <h1>סטטיסטיקות</h1>
         </div>
+        <div class="admin-page-actions">
+          <button class="admin-btn" id="refresh-btn" type="button">↻ רענן</button>
+          <a class="admin-btn is-primary" href="news.html">+ ידיעה מהירה</a>
+        </div>
       </div>
-      <div class="admin-placeholder">
-        <h3 style="margin-top:0">בפיתוח · Phase 2</h3>
-        <p>הסטטיסטיקות יחוברו ל-GA4 (Measurement Protocol דרך Pages Function) ולספירות GROQ מ-Sanity.</p>
-        <p>נתונים מתוכננים:</p>
-        <ul>
-          <li>תנועה יומית/שבועית (page views, sessions)</li>
-          <li>Top stories — מאמרים וידיעות לפי קריאות</li>
-          <li>Channel CTR — אחוז הקלקות מ-Telegram / WhatsApp</li>
-          <li>Funnel — מ-news card אל article view</li>
-        </ul>
+
+      <!-- Top cards -->
+      <div class="admin-grid" id="stats-top">
+        <div class="admin-stat">
+          <div class="admin-stat-label">סה"כ מאמרים</div>
+          <div class="admin-stat-value" data-stat="articles">—</div>
+          <div class="admin-stat-hint">/api/list-articles</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">סה"כ ידיעות</div>
+          <div class="admin-stat-value" data-stat="news">—</div>
+          <div class="admin-stat-hint">/api/list-news</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">דחופות (breaking)</div>
+          <div class="admin-stat-value" data-stat="breaking">—</div>
+          <div class="admin-stat-hint">urgency = breaking</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">חדש ב-24 שעות</div>
+          <div class="admin-stat-value" data-stat="last24">—</div>
+          <div class="admin-stat-hint">news · publishedAt &lt; 24h</div>
+        </div>
+      </div>
+
+      <!-- Categories + activity -->
+      <div class="stats-section">
+        <div class="stats-two-col">
+          <section class="stats-panel" id="panel-categories">
+            <div class="stats-panel-head">
+              <h3>ידיעות לפי קטגוריה</h3>
+              <span class="stats-panel-hint">CATEGORY</span>
+            </div>
+            <div data-panel-body><div class="admin-empty" style="padding:18px">טוען...</div></div>
+          </section>
+
+          <section class="stats-panel" id="panel-activity">
+            <div class="stats-panel-head">
+              <h3>פעילות אחרון 7 ימים</h3>
+              <span class="stats-panel-hint">DAY-BY-DAY</span>
+            </div>
+            <div data-panel-body><div class="admin-empty" style="padding:18px">טוען...</div></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Recent feed -->
+      <div class="stats-section">
+        <section class="stats-panel" id="panel-feed">
+          <div class="stats-panel-head">
+            <h3>פיד פעילות אחרון</h3>
+            <span class="stats-panel-hint">10 LATEST</span>
+          </div>
+          <div data-panel-body><div class="admin-empty" style="padding:18px">טוען...</div></div>
+        </section>
+      </div>
+
+      <!-- Empty state (hidden by default) -->
+      <div id="global-empty" class="admin-placeholder" style="display:none;margin-top:28px;text-align:center">
+        <h3 style="margin-top:0">אין עדיין שום תוכן</h3>
+        <p>צור פריט ראשון כדי להתחיל למלא את לוח המחוונים.</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+          <a class="admin-btn is-primary" href="news.html">+ ידיעה מהירה</a>
+          <a class="admin-btn" href="../article.html?action=new">+ מאמר חדש</a>
+        </div>
       </div>
     </main>
   </div>
 </div>
 <script src="admin.js"></script>
+<script>
+(function () {
+  var CATEGORIES = [
+    { key: 'breaking',     label: 'דחוף' },
+    { key: 'update',       label: 'עדכון' },
+    { key: 'analysis',     label: 'ניתוח' },
+    { key: 'release',      label: 'שחרור' },
+    { key: 'rumor',        label: 'שמועה' },
+    { key: 'guide-short',  label: 'מדריך קצר' },
+  ];
+  var DAY_NAMES = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי','שבת'];
+
+  var state = { articles: null, news: null, articlesErr: null, newsErr: null };
+
+  function setStat(key, val) {
+    var el = document.querySelector('[data-stat="' + key + '"]');
+    if (el) el.textContent = String(val);
+  }
+
+  function panelError(panelId, msg) {
+    var p = document.querySelector('#' + panelId + ' [data-panel-body]');
+    if (!p) return;
+    p.innerHTML =
+      '<div class="stats-error">'
+      + '<span>טעינה נכשלה — ' + AdminShell.escapeHtml(msg || '') + '</span>'
+      + '<button class="admin-btn" data-retry="' + panelId + '" type="button">לחץ לרענון</button>'
+      + '</div>';
+  }
+
+  function renderCategories() {
+    var body = document.querySelector('#panel-categories [data-panel-body]');
+    if (!body) return;
+    if (state.newsErr) { panelError('panel-categories', state.newsErr); return; }
+    var list = state.news || [];
+    var counts = {};
+    CATEGORIES.forEach(function (c) { counts[c.key] = 0; });
+    list.forEach(function (n) {
+      var k = (n.category || 'update');
+      if (counts[k] === undefined) counts[k] = 0;
+      counts[k]++;
+    });
+    var max = 0;
+    CATEGORIES.forEach(function (c) { if (counts[c.key] > max) max = counts[c.key]; });
+
+    if (!list.length) {
+      body.innerHTML = '<div class="admin-empty" style="padding:18px">אין ידיעות עדיין.</div>';
+      return;
+    }
+
+    var rows = CATEGORIES.map(function (c) {
+      var n = counts[c.key] || 0;
+      var pct = max > 0 ? Math.round((n / max) * 100) : 0;
+      return '<div class="bar-row">'
+        + '<div class="bar-label">' + AdminShell.escapeHtml(c.label) + '</div>'
+        + '<div class="bar-track"><div class="bar-fill ' + (n === 0 ? 'is-zero' : '') + '" style="width:' + pct + '%"></div></div>'
+        + '<div class="bar-count">' + n + '</div>'
+        + '</div>';
+    }).join('');
+    body.innerHTML = rows;
+  }
+
+  function renderActivity() {
+    var body = document.querySelector('#panel-activity [data-panel-body]');
+    if (!body) return;
+    if (state.newsErr && state.articlesErr) { panelError('panel-activity', state.newsErr); return; }
+
+    var news = state.news || [];
+    var articles = state.articles || [];
+
+    // Build last 7 days, today included
+    var days = [];
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(now);
+      d.setDate(now.getDate() - i);
+      days.push({ date: d, news: 0, articles: 0 });
+    }
+    function bucketDate(iso) {
+      if (!iso) return null;
+      var dt = new Date(iso);
+      if (isNaN(dt.getTime())) return null;
+      dt.setHours(0, 0, 0, 0);
+      return dt.getTime();
+    }
+    news.forEach(function (n) {
+      var t = bucketDate(n.publishedAt || n._updatedAt);
+      if (!t) return;
+      for (var j = 0; j < days.length; j++) if (days[j].date.getTime() === t) { days[j].news++; break; }
+    });
+    articles.forEach(function (a) {
+      var t = bucketDate(a.publishedAt || a._updatedAt);
+      if (!t) return;
+      for (var j = 0; j < days.length; j++) if (days[j].date.getTime() === t) { days[j].articles++; break; }
+    });
+
+    var rows = days.map(function (d) {
+      var dd = String(d.date.getDate()).padStart(2, '0');
+      var mm = String(d.date.getMonth() + 1).padStart(2, '0');
+      var dayLabel = DAY_NAMES[d.date.getDay()] + ' · ' + dd + '/' + mm;
+      var total = d.news + d.articles;
+      return '<div class="day-row ' + (total === 0 ? 'is-empty' : '') + '">'
+        + '<div class="day-label">' + AdminShell.escapeHtml(dayLabel) + '</div>'
+        + '<div class="day-counts">'
+        +   '<span><strong>' + d.news + '</strong> ידיעות</span>'
+        +   '<span><strong>' + d.articles + '</strong> מאמרים</span>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+    body.innerHTML = rows;
+  }
+
+  function renderFeed() {
+    var body = document.querySelector('#panel-feed [data-panel-body]');
+    if (!body) return;
+    if (state.newsErr && state.articlesErr) { panelError('panel-feed', state.newsErr); return; }
+
+    var items = [];
+    (state.news || []).forEach(function (n) {
+      items.push({
+        kind: 'news',
+        title: n.headline || '(ללא כותרת)',
+        slug: n.slug || '',
+        when: n.publishedAt || n._updatedAt || '',
+      });
+    });
+    (state.articles || []).forEach(function (a) {
+      items.push({
+        kind: 'article',
+        title: a.title || '(ללא כותרת)',
+        slug: a.slug || '',
+        when: a.publishedAt || a._updatedAt || '',
+      });
+    });
+    items.sort(function (a, b) {
+      return new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime();
+    });
+    items = items.slice(0, 10);
+
+    if (!items.length) {
+      body.innerHTML = '<div class="admin-empty" style="padding:18px">אין פעילות אחרונה.</div>';
+      return;
+    }
+
+    var rows = items.map(function (it) {
+      var typePill = it.kind === 'news'
+        ? AdminShell.pill('ידיעה')
+        : AdminShell.pill('מאמר', 'published');
+      var url = it.kind === 'news'
+        ? ('../news.html#' + encodeURIComponent(it.slug))
+        : ('../article.html?action=view&slug=' + encodeURIComponent(it.slug));
+      return '<tr data-go="' + AdminShell.escapeHtml(url) + '">'
+        + '<td>' + typePill + '</td>'
+        + '<td>' + AdminShell.escapeHtml(it.title) + '</td>'
+        + '<td>' + AdminShell.fmtTime(it.when) + '</td>'
+        + '<td><code style="font-size:11px">' + AdminShell.escapeHtml(it.slug) + '</code></td>'
+        + '</tr>';
+    }).join('');
+
+    body.innerHTML =
+      '<div class="admin-table-wrap" style="border:0;background:transparent">'
+      + '<table class="admin-table feed-table">'
+      + '<thead><tr><th>סוג</th><th>כותרת</th><th>מתי</th><th>slug</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>';
+
+    body.querySelectorAll('tr[data-go]').forEach(function (tr) {
+      tr.addEventListener('click', function () {
+        var u = tr.getAttribute('data-go');
+        if (u) window.open(u, '_blank', 'noopener');
+      });
+    });
+  }
+
+  function updateTopCards() {
+    var arts = state.articles || [];
+    var news = state.news || [];
+    setStat('articles', state.articlesErr ? '—' : arts.length);
+    setStat('news', state.newsErr ? '—' : news.length);
+
+    var breaking = news.filter(function (n) { return n.urgency === 'breaking'; }).length;
+    setStat('breaking', state.newsErr ? '—' : breaking);
+
+    var cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    var last24 = news.filter(function (n) {
+      var t = new Date(n.publishedAt || n._updatedAt || 0).getTime();
+      return !isNaN(t) && t >= cutoff;
+    }).length;
+    setStat('last24', state.newsErr ? '—' : last24);
+  }
+
+  function maybeGlobalEmpty() {
+    var emptyEl = document.getElementById('global-empty');
+    if (!emptyEl) return;
+    var noArticles = !state.articlesErr && (state.articles || []).length === 0;
+    var noNews = !state.newsErr && (state.news || []).length === 0;
+    emptyEl.style.display = (noArticles && noNews) ? 'block' : 'none';
+  }
+
+  async function fetchAll() {
+    // Reset panel bodies to loading
+    document.querySelectorAll('[data-panel-body]').forEach(function (b) {
+      b.innerHTML = '<div class="admin-empty" style="padding:18px">טוען...</div>';
+    });
+    state = { articles: null, news: null, articlesErr: null, newsErr: null };
+
+    var results = await Promise.allSettled([
+      AdminShell.loadList('/api/list-articles'),
+      AdminShell.loadList('/api/list-news'),
+    ]);
+
+    if (results[0].status === 'fulfilled') {
+      state.articles = results[0].value.articles || [];
+    } else {
+      state.articlesErr = (results[0].reason && results[0].reason.message) || 'unknown';
+    }
+    if (results[1].status === 'fulfilled') {
+      state.news = results[1].value.news || [];
+    } else {
+      state.newsErr = (results[1].reason && results[1].reason.message) || 'unknown';
+    }
+
+    updateTopCards();
+    renderCategories();
+    renderActivity();
+    renderFeed();
+    maybeGlobalEmpty();
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t && t.matches && t.matches('[data-retry]')) {
+      fetchAll();
+    }
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', fetchAll);
+
+  fetchAll();
+})();
+</script>
 </body>
 </html>

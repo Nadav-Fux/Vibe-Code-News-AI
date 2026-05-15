@@ -190,6 +190,37 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
   // response into Notion-style blocks (lead + heading2 + paragraphs per section).
   // If the editor is empty (default single empty paragraph), replaces; otherwise
   // appends so we don't clobber existing work.
+  // Applies an ai-format `data` object (mode=article shape) to the editor.
+  // Used both by the single-version flow (handleAiFormat) and the
+  // multi-version "pick the best" flow in V5AiFormatDialog.
+  const applyArticleData = useCallback((data, providerLabel) => {
+    if (!data) return false;
+    if (data.title && !title.trim()) setTitle(data.title);
+    if (data.slug && !slug.trim()) setSlug(data.slug);
+    const generated = [];
+    if (data.lead) {
+      generated.push(v5eEmptyOfType('lead', { content: data.lead }));
+    }
+    (Array.isArray(data.sections) ? data.sections : []).forEach((s) => {
+      if (s.heading) generated.push(v5eEmptyOfType('heading2', { content: s.heading }));
+      const paragraphs = (s.body || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+      paragraphs.forEach((p) => generated.push(v5eEmptyOfType('paragraph', { content: p })));
+    });
+    if (Array.isArray(data.takeaways) && data.takeaways.length) {
+      generated.push(v5eEmptyOfType('callout', { content: 'נקודות עיקריות: ' + data.takeaways.join(' · '), tone: 'sage' }));
+    }
+    if (!generated.length) {
+      v5eToast('AI לא החזיר תוכן בר-המרה', 'warn');
+      return false;
+    }
+    setBlocks((prev) => {
+      const isEffectivelyEmpty = prev.length === 1 && prev[0].type === 'paragraph' && !(prev[0].content || '').trim();
+      return isEffectivelyEmpty ? generated : prev.concat(generated);
+    });
+    v5eToast('סודר עם ' + (providerLabel || 'AI') + ' — בדוק ועדכן', 'success');
+    return true;
+  }, [title, slug]);
+
   const handleAiFormat = useCallback(async (rawText, instructions) => {
     const secret = getEditorSecretLS();
     if (!secret) {
@@ -210,38 +241,14 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
         v5eToast('AI נכשל: ' + msg, 'warn', 4200);
         return false;
       }
-      const data = j.data || {};
-      if (data.title && !title.trim()) setTitle(data.title);
-      if (data.slug && !slug.trim()) setSlug(data.slug);
-      const generated = [];
-      if (data.lead) {
-        generated.push(v5eEmptyOfType('lead', { content: data.lead }));
-      }
-      (Array.isArray(data.sections) ? data.sections : []).forEach((s) => {
-        if (s.heading) generated.push(v5eEmptyOfType('heading2', { content: s.heading }));
-        const paragraphs = (s.body || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
-        paragraphs.forEach((p) => generated.push(v5eEmptyOfType('paragraph', { content: p })));
-      });
-      if (Array.isArray(data.takeaways) && data.takeaways.length) {
-        generated.push(v5eEmptyOfType('callout', { content: 'נקודות עיקריות: ' + data.takeaways.join(' · '), tone: 'sage' }));
-      }
-      if (!generated.length) {
-        v5eToast('AI לא החזיר תוכן בר-המרה', 'warn');
-        return false;
-      }
-      setBlocks((prev) => {
-        const isEffectivelyEmpty = prev.length === 1 && prev[0].type === 'paragraph' && !(prev[0].content || '').trim();
-        return isEffectivelyEmpty ? generated : prev.concat(generated);
-      });
-      v5eToast('סודר עם ' + (j.provider || 'AI') + ' — בדוק ועדכן', 'success');
-      return true;
+      return applyArticleData(j.data || {}, j.provider || 'AI');
     } catch (e) {
       v5eToast('שגיאת רשת: ' + e.message, 'warn');
       return false;
     } finally {
       setAiBusy(false);
     }
-  }, [title, slug]);
+  }, [applyArticleData]);
 
   // ---------- Save / publish ----------
   const handlePublish = async () => {
@@ -363,6 +370,10 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
           onClose={() => setAiDialogOpen(false)}
           onSubmit={async (rawText, instructions) => {
             const ok = await handleAiFormat(rawText, instructions);
+            if (ok) setAiDialogOpen(false);
+          }}
+          onApplyVersion={(data, providerLabel) => {
+            const ok = applyArticleData(data, providerLabel || 'הגרסה הנבחרת');
             if (ok) setAiDialogOpen(false);
           }}
         />
@@ -975,47 +986,136 @@ function V5SecretDialog({ onClose }) {
 
 // ---------- AI format dialog ----------
 
-function V5AiFormatDialog({ onClose, onSubmit, busy }) {
+function V5AiFormatDialog({ onClose, onSubmit, onApplyVersion, busy }) {
   const [rawText, setRawText] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [versions, setVersions] = useState(null); // null | array
+  const [loadingMulti, setLoadingMulti] = useState(false);
+
   const submit = () => {
     const t = rawText.trim();
     if (t.length < 20) { v5eToast('הזן לפחות 20 תווים', 'warn'); return; }
     onSubmit(t, instructions.trim());
   };
+
+  const submitMulti = async () => {
+    const t = rawText.trim();
+    if (t.length < 20) { v5eToast('הזן לפחות 20 תווים', 'warn'); return; }
+    const secret = getEditorSecretLS();
+    if (!secret) { v5eToast('הגדר Editor Secret קודם (⚙)', 'warn'); return; }
+    setLoadingMulti(true);
+    try {
+      const r = await fetch('/api/ai-format-multi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Editor-Secret': secret },
+        body: JSON.stringify({ rawText: t, mode: 'article', instructions: instructions.trim() }),
+      });
+      const j = await r.json().catch(() => ({}));
+      const list = (j && j.versions) || [];
+      if (!list.length) {
+        v5eToast('AI נכשל: ' + ((j && (j.error || j.message)) || ('HTTP ' + r.status)), 'warn', 4200);
+        return;
+      }
+      setVersions(list);
+    } catch (e) {
+      v5eToast('שגיאת רשת: ' + e.message, 'warn');
+    } finally {
+      setLoadingMulti(false);
+    }
+  };
+
+  const isBusy = busy || loadingMulti;
+  const showVersions = versions !== null;
+
   return (
-    <div className="v5e-dialog-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="v5e-dialog" style={{ maxWidth: 640 }}>
-        <h3>✨ סדר עם AI</h3>
-        <p>
-          הדבק טקסט גולמי (טיוטה, תמליל, הערות) — ה-AI יסדר אותו לכותרת + lead + סעיפים עם פסקאות.
-          הבלוקים החדשים יתווספו לעורך; אם הוא ריק, הם יחליפו את הפסקה הריקה. כותרת ו-slug מתמלאים אם הם ריקים.
-        </p>
-        <textarea
-          className="v5e-input"
-          rows={9}
-          value={rawText}
-          onChange={(e) => setRawText(e.target.value)}
-          placeholder="הדבק או הקלד טקסט גולמי כאן…"
-          dir="rtl"
-          style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.55 }}
-          disabled={busy}
-        />
-        <input
-          className="v5e-input"
-          value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
-          placeholder="הנחיה אופציונלית לעורך AI (למשל: 'טון רשמי', 'התמקד בהשלכות עסקיות')"
-          dir="rtl"
-          style={{ marginTop: 8 }}
-          disabled={busy}
-        />
-        <div className="v5e-dialog-actions">
-          <button className="v5e-btn ghost" onClick={onClose} disabled={busy}>ביטול</button>
-          <button className="v5e-btn primary" onClick={submit} disabled={busy}>
-            {busy ? 'מבקש מ-AI…' : 'סדר וצור בלוקים'}
-          </button>
-        </div>
+    <div className="v5e-dialog-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !isBusy) onClose(); }}>
+      <div className="v5e-dialog" style={{ maxWidth: 720 }}>
+        {!showVersions && (
+          <>
+            <h3>✨ סדר עם AI</h3>
+            <p>
+              הדבק טקסט גולמי (טיוטה, תמליל, הערות) — ה-AI יסדר אותו לכותרת + lead + סעיפים עם פסקאות.
+              הבלוקים החדשים יתווספו לעורך; אם הוא ריק, הם יחליפו את הפסקה הריקה. כותרת ו-slug מתמלאים אם הם ריקים.
+            </p>
+            <textarea
+              className="v5e-input"
+              rows={9}
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder="הדבק או הקלד טקסט גולמי כאן…"
+              dir="rtl"
+              style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.55 }}
+              disabled={isBusy}
+            />
+            <input
+              className="v5e-input"
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="הנחיה אופציונלית לעורך AI (למשל: 'טון רשמי', 'התמקד בהשלכות עסקיות')"
+              dir="rtl"
+              style={{ marginTop: 8 }}
+              disabled={isBusy}
+            />
+            <div className="v5e-dialog-actions">
+              <button className="v5e-btn ghost" onClick={onClose} disabled={isBusy}>ביטול</button>
+              <button className="v5e-btn ghost" onClick={submitMulti} disabled={isBusy} title="קבל 3 גרסאות מ-Groq + OpenAI + Anthropic ובחר את הטובה ביותר">
+                {loadingMulti ? '⏳ 3 גרסאות מקבילות…' : '🎯 3 גרסאות'}
+              </button>
+              <button className="v5e-btn primary" onClick={submit} disabled={isBusy}>
+                {busy ? 'מבקש מ-AI…' : 'סדר וצור בלוקים'}
+              </button>
+            </div>
+          </>
+        )}
+        {showVersions && (
+          <>
+            <h3>🎯 בחר את הגרסה הטובה ביותר</h3>
+            <p style={{ marginBottom: 12 }}>
+              {versions.filter(v => v.ok).length} מתוך {versions.length} ספקים החזירו תוצאה.
+            </p>
+            <div style={{ display: 'grid', gap: 10, maxHeight: '55vh', overflowY: 'auto' }}>
+              {versions.map((v, i) => {
+                if (!v.ok) {
+                  return (
+                    <div key={i} style={{ padding: '8px 12px', border: '1px dashed var(--v5e-border, #ccc)', borderRadius: 4, fontSize: 12.5, opacity: 0.65 }}>
+                      <strong>{v.provider}</strong>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, marginInlineStart: 8 }}>{v.model || ''}</span>
+                      <span style={{ marginInlineStart: 8 }}>· ✗ {v.reason || 'error'}</span>
+                      {v.message && <span style={{ marginInlineStart: 6, opacity: 0.75 }}>({(v.message || '').slice(0, 80)})</span>}
+                    </div>
+                  );
+                }
+                const d = v.data || {};
+                const titlePreview = (d.title || '').slice(0, 100);
+                const leadPreview = (d.lead || '').slice(0, 160);
+                const sectionsCount = (d.sections || []).length;
+                return (
+                  <div key={i} style={{ padding: '12px 14px', border: '1px solid var(--v5e-border, #ccc)', borderRadius: 4, background: 'var(--v5e-bg-soft, #fafafa)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <strong style={{ fontSize: 14 }}>{v.provider}</strong>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, opacity: 0.7 }}>{v.model || ''}</span>
+                        <span style={{ fontSize: 11, color: '#0a7' }}>✓</span>
+                      </div>
+                      <span style={{ fontSize: 11, opacity: 0.6 }}>{v.elapsedMs || 0}ms · {sectionsCount} סעיפים</span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{titlePreview}{(d.title || '').length > 100 ? '…' : ''}</div>
+                    <div style={{ fontSize: 12.5, opacity: 0.75, marginBottom: 10, lineHeight: 1.5 }}>{leadPreview}{(d.lead || '').length > 160 ? '…' : ''}</div>
+                    <button
+                      className="v5e-btn primary"
+                      style={{ fontSize: 12.5 }}
+                      onClick={() => onApplyVersion && onApplyVersion(v.data, v.provider)}
+                    >השתמש בגרסה זו</button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="v5e-dialog-actions">
+              <button className="v5e-btn ghost" onClick={() => setVersions(null)} disabled={isBusy}>← חזור</button>
+              <button className="v5e-btn ghost" onClick={onClose} disabled={isBusy}>סגור</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

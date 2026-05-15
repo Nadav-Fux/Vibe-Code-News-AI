@@ -1,0 +1,17 @@
+# Excluded from Cloudflare Pages static-asset upload.
+# These folders are Node.js / Sanity tooling — they aren't served at runtime.
+# functions/ stays included; its files become Pages Functions automatically.
+
+studio/
+scripts/
+docs/
+node_modules/
+.github/
+.git/
+README.md
+.dev.vars
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

@@ -18,8 +18,11 @@
 | Phase 3-A — Research (Brave Search + Groq synthesis) ב-`+ ידיעה מהירה` | ✅ סגור |
 | Phase Telegram-A — outbound (פרסום אוטומטי לערוץ) | ✅ סגור |
 | Phase Telegram-B — inbound webhook (פוסט בערוץ → news draft) | ✅ סגור |
-| Phase 3-B — multi-version generation (2-3 ספקים, העורך בוחר) | 🗺️ מתוכנן |
-| Phase Telegram-C — historical retrieve (sync היסטוריה אחת) | 🗺️ מתוכנן |
+| Phase 3-B — multi-version generation (Groq + OpenAI + Anthropic במקביל) | ✅ סגור |
+| Phase Telegram-C — historical import (Telegram Desktop JSON → Sanity drafts) | ✅ סגור (סקריפט) |
+| Phase Stats — /admin/stats ו-/admin/channels עם data אמיתי | ✅ סגור |
+| Phase Search — חיפוש + tags + pagination ב-`/articles` ו-`/news` | ✅ סגור |
+| Phase Studio-Action — `✨ סדר עם AI` בתוך Sanity Studio | ✅ סגור |
 
 האתר חי ב-`new.nvision.me` (Pages project: `vibe-code-news-ai`). Deploy אוטומטי על push ל-main.
 
@@ -44,6 +47,10 @@
 | `TELEGRAM_BOT_TOKEN` | (מ-KV `TELEGRAM_BOT_TOKEN`) | **secret_text** |
 | `TELEGRAM_CHAT_ID` | `7694920368` (מ-KV) | plain_text |
 | `TELEGRAM_WEBHOOK_SECRET` | (random 24-byte hex) | **secret_text** |
+| `OPENAI_API_KEY` | (מ-KV `OPENAI_API_KEY`) | **secret_text** |
+| `OPENAI_MODEL` | `gpt-4o-mini` | plain_text |
+| `ANTHROPIC_API_KEY` | (מ-KV `ANTHROPIC_API_KEY`) | **secret_text** |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | plain_text |
 
 > הערכים של `EDITOR_SECRET` ו-`TELEGRAM_WEBHOOK_SECRET` מועברים במסרים נפרדים. שמור את ה-EDITOR_SECRET ב-localStorage של הדפדפן (מפתח `v5_editor_secret`).
 

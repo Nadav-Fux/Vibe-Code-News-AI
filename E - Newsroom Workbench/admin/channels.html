@@ -6,6 +6,193 @@
 <title>nVision Studio · ערוצים</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="admin.css"/>
+<style>
+  /* channels-only inline styles */
+  .ch-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 980px) { .ch-cards { grid-template-columns: 1fr; } }
+  .ch-card {
+    border: 1.5px solid var(--admin-line-2);
+    background: var(--admin-bg-2);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ch-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .ch-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 24px;
+    letter-spacing: -0.01em;
+  }
+  .ch-icon {
+    font-size: 22px;
+    line-height: 1;
+  }
+  .ch-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    padding: 4px 8px;
+    border: 1px solid var(--admin-line-2);
+    background: var(--admin-bg);
+    text-transform: uppercase;
+  }
+  .ch-status.is-active {
+    background: var(--admin-accent);
+    color: var(--admin-ink);
+    border-color: var(--admin-accent);
+  }
+  .ch-status.is-planned {
+    background: var(--admin-bg);
+    color: var(--admin-dim);
+  }
+  .ch-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-top: 1px dashed var(--admin-line);
+    font-size: 13px;
+  }
+  .ch-card-row:first-of-type { border-top: 0; }
+  .ch-card-row .ch-row-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: var(--admin-dim);
+    text-transform: uppercase;
+  }
+  .ch-card-row .ch-row-value {
+    font-weight: 700;
+    color: var(--admin-ink);
+  }
+  .ch-card-row .ch-row-value.is-dim {
+    font-weight: 500;
+    color: var(--admin-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .ch-section {
+    margin-top: 28px;
+  }
+  .ch-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--admin-line);
+  }
+  .ch-section-head h2 {
+    margin: 0;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 26px;
+    letter-spacing: -0.01em;
+  }
+  .ch-section-head .ch-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--admin-dim);
+    text-transform: uppercase;
+  }
+  .ch-diag {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 720px) { .ch-diag { grid-template-columns: 1fr; } }
+  .ch-diag-item {
+    padding: 10px 14px;
+    border: 1px solid var(--admin-line-2);
+    background: var(--admin-bg-2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .ch-diag-item .ch-diag-label {
+    font-weight: 600;
+    color: var(--admin-ink-2);
+  }
+  .ch-diag-item .ch-diag-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--admin-dim);
+  }
+  .ch-diag-item.is-on .ch-diag-val { color: var(--admin-accent); font-weight: 700; }
+  .ch-diag-item.is-off .ch-diag-val { color: var(--admin-danger); font-weight: 700; }
+
+  .ch-codeblock {
+    background: var(--admin-ink);
+    color: #eee2c8;
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow-x: auto;
+    direction: ltr;
+    text-align: left;
+    white-space: pre;
+    border: 1.5px solid var(--admin-ink);
+  }
+  .ch-codeblock-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 8px 0 6px;
+  }
+  .ch-codeblock-head strong {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    color: var(--admin-dim);
+    text-transform: uppercase;
+  }
+
+  .ch-empty-inline {
+    padding: 14px;
+    color: var(--admin-dim);
+    font-size: 13px;
+    text-align: center;
+    border: 1px dashed var(--admin-line-2);
+    background: var(--admin-bg-2);
+  }
+  .ch-error-inline {
+    padding: 14px;
+    border: 1px dashed var(--admin-danger);
+    background: rgba(231,76,60,0.06);
+    color: var(--admin-danger);
+    font-size: 13px;
+  }
+
+  .ch-plan-list { margin: 8px 0 0; padding-right: 18px; line-height: 1.8; font-size: 13.5px; }
+  .ch-plan-list code {
+    background: var(--admin-bg);
+    padding: 1px 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+</style>
 </head>
 <body>
 <div class="admin-shell">
@@ -14,7 +201,10 @@
       <div class="admin-brand-mark">n.</div>
       <div class="admin-brand-name"><strong>nVision Studio</strong><span>VIBE CODE NEWS · STUDIO</span></div>
     </div>
-    <div class="admin-top-right"><a href="../index.html">← חזרה לאתר</a></div>
+    <div class="admin-top-right">
+      <a href="../index.html">← חזרה לאתר</a>
+      <a href="../news.html">פיד חדשות</a>
+    </div>
   </header>
   <div class="admin-body">
     <nav class="admin-nav" data-admin-nav></nav>
@@ -24,21 +214,251 @@
           <p class="eyebrow">DISTRIBUTION</p>
           <h1>ערוצים</h1>
         </div>
+        <div class="admin-page-actions">
+          <button class="admin-btn" id="refresh-btn" type="button">↻ רענן</button>
+        </div>
       </div>
-      <div class="admin-placeholder">
-        <h3 style="margin-top:0">בפיתוח · Phase 2</h3>
-        <p>החיבור ל-Telegram + WhatsApp ייכנס כפונקציות נפרדות תחת <code>functions/api/publish-channel/</code>:</p>
-        <ul>
-          <li><strong>Telegram outbound:</strong> Bot API <code>sendMessage</code> לכל ידיעה עם <code>channels.includes("telegram")</code></li>
-          <li><strong>Telegram inbound:</strong> webhook → יצירת news draft</li>
-          <li><strong>WhatsApp outbound:</strong> Business Cloud API · message template</li>
-          <li><strong>WhatsApp inbound:</strong> webhook → news draft (אופציונלי)</li>
-        </ul>
-        <p>סודות הבוטים יישמרו ב-Cloudflare Pages env vars (<code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_CHANNEL_ID</code>, <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>) — לא ב-localStorage או בקליינט.</p>
+
+      <!-- Top channel cards -->
+      <div class="ch-cards" id="ch-cards">
+        <div class="ch-card">
+          <div class="ch-card-head">
+            <div class="ch-card-title"><span class="ch-icon">📰</span><span>Web</span></div>
+            <span class="ch-status is-active">✅ פעיל</span>
+          </div>
+          <div class="ch-card-row"><span class="ch-row-label">ידיעות מנותבות</span><span class="ch-row-value" data-ch-count="web">—</span></div>
+          <div class="ch-card-row"><span class="ch-row-label">פרסום אחרון</span><span class="ch-row-value is-dim" data-ch-last="web">—</span></div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-head">
+            <div class="ch-card-title"><span class="ch-icon">✈️</span><span>Telegram</span></div>
+            <span class="ch-status" data-ch-pill="telegram">…</span>
+          </div>
+          <div class="ch-card-row"><span class="ch-row-label">ידיעות מנותבות</span><span class="ch-row-value" data-ch-count="telegram">—</span></div>
+          <div class="ch-card-row"><span class="ch-row-label">פרסום אחרון</span><span class="ch-row-value is-dim" data-ch-last="telegram">—</span></div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-head">
+            <div class="ch-card-title"><span class="ch-icon">💬</span><span>WhatsApp</span></div>
+            <span class="ch-status is-planned">🗺️ מתוכנן</span>
+          </div>
+          <div class="ch-card-row"><span class="ch-row-label">ידיעות מנותבות</span><span class="ch-row-value" data-ch-count="whatsapp">—</span></div>
+          <div class="ch-card-row"><span class="ch-row-label">פרסום אחרון</span><span class="ch-row-value is-dim" data-ch-last="whatsapp">—</span></div>
+        </div>
       </div>
+
+      <!-- Telegram section -->
+      <section class="ch-section">
+        <div class="ch-section-head">
+          <h2>Telegram — אבחון</h2>
+          <span class="ch-eyebrow">/api/telegram-webhook · healthcheck</span>
+        </div>
+
+        <div class="ch-diag" id="telegram-diag">
+          <div class="ch-diag-item" id="diag-secret">
+            <span class="ch-diag-label">Webhook secret</span>
+            <span class="ch-diag-val">בודק...</span>
+          </div>
+          <div class="ch-diag-item" id="diag-sanity">
+            <span class="ch-diag-label">Sanity</span>
+            <span class="ch-diag-val">בודק...</span>
+          </div>
+        </div>
+
+        <div class="ch-codeblock-head">
+          <strong>🔧 רישום webhook (העתק-הדבק)</strong>
+        </div>
+        <pre class="ch-codeblock">curl -sS -X POST \
+  "https://api.telegram.org/bot&lt;BOT_TOKEN&gt;/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://new.nvision.me/api/telegram-webhook",
+    "secret_token": "&lt;SECRET&gt;",
+    "allowed_updates": ["channel_post", "message", "edited_channel_post"]
+  }'</pre>
+        <p style="font-size:12px;color:var(--admin-dim);margin:6px 2px 0">
+          החלף את <code>&lt;BOT_TOKEN&gt;</code> ב-<code>TELEGRAM_BOT_TOKEN</code> ואת <code>&lt;SECRET&gt;</code> בערך של <code>TELEGRAM_WEBHOOK_SECRET</code> ש-Cloudflare Pages מחזיק. אחרי הרצה Telegram יחזיר <code>{"ok":true,"result":true}</code>.
+        </p>
+
+        <div class="ch-section-head" style="margin-top:24px">
+          <h2>📊 פוסטים שנכנסו מ-Telegram</h2>
+          <span class="ch-eyebrow">channels = ['telegram-source']</span>
+        </div>
+        <div id="tg-inbound-wrap">
+          <div class="admin-empty" style="padding:18px">טוען...</div>
+        </div>
+      </section>
+
+      <!-- WhatsApp section -->
+      <section class="ch-section">
+        <div class="ch-section-head">
+          <h2>WhatsApp — מתוכנן</h2>
+          <span class="ch-eyebrow">Phase WhatsApp-A</span>
+        </div>
+        <div class="admin-placeholder" style="margin-bottom:0">
+          <h3 style="margin-top:0">סטטוס: מתוכנן · עוד לא פעיל</h3>
+          <p style="margin:6px 0 0">
+            התוכנית עבור Phase WhatsApp-A:
+          </p>
+          <ul class="ch-plan-list">
+            <li><strong>Outbound:</strong> WhatsApp Business Cloud API — שליחת ידיעות דרך <code>message template</code> מאושר (כי הודעות לא-template מותרות רק בתוך חלון של 24 שעות).</li>
+            <li><strong>Inbound:</strong> webhook ל-<code>/api/whatsapp-webhook</code> יקלוט הודעות נכנסות מהעורך וייצור news draft (אנלוגי ל-<code>telegram-source</code>).</li>
+            <li><strong>סודות:</strong> <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_VERIFY_TOKEN</code> ב-Cloudflare Pages env vars.</li>
+            <li><strong>ניתוב:</strong> ידיעה תכלול את הערוץ <code>"whatsapp"</code> ב-<code>channels[]</code> כדי שתישלח אוטומטית.</li>
+          </ul>
+        </div>
+      </section>
     </main>
   </div>
 </div>
 <script src="admin.js"></script>
+<script>
+(function () {
+  var state = { news: [], newsErr: null };
+
+  function setText(sel, val) {
+    var el = document.querySelector(sel);
+    if (el) el.textContent = val;
+  }
+
+  function pillFor(name, isActive) {
+    var el = document.querySelector('[data-ch-pill="' + name + '"]');
+    if (!el) return;
+    el.classList.remove('is-active', 'is-planned');
+    if (isActive) {
+      el.classList.add('is-active');
+      el.textContent = '✅ פעיל';
+    } else {
+      el.classList.add('is-planned');
+      el.textContent = '🗺️ מתוכנן';
+    }
+  }
+
+  function newest(filterFn) {
+    var match = state.news.filter(filterFn);
+    if (!match.length) return null;
+    match.sort(function (a, b) {
+      return new Date(b.publishedAt || b._updatedAt || 0).getTime()
+           - new Date(a.publishedAt || a._updatedAt || 0).getTime();
+    });
+    return match[0].publishedAt || match[0]._updatedAt || null;
+  }
+
+  function renderChannelCounts() {
+    var web = state.news.filter(function (n) { return (n.channels || []).indexOf('web') !== -1; });
+    var tg  = state.news.filter(function (n) { return (n.channels || []).indexOf('telegram') !== -1; });
+    var wa  = state.news.filter(function (n) { return (n.channels || []).indexOf('whatsapp') !== -1; });
+
+    setText('[data-ch-count="web"]', state.newsErr ? '—' : String(web.length));
+    setText('[data-ch-count="telegram"]', state.newsErr ? '—' : String(tg.length));
+    setText('[data-ch-count="whatsapp"]', state.newsErr ? '—' : String(wa.length));
+
+    setText('[data-ch-last="web"]', AdminShell.fmtTime(newest(function (n) { return (n.channels || []).indexOf('web') !== -1; })));
+    setText('[data-ch-last="telegram"]', AdminShell.fmtTime(newest(function (n) { return (n.channels || []).indexOf('telegram') !== -1; })));
+    setText('[data-ch-last="whatsapp"]', AdminShell.fmtTime(newest(function (n) { return (n.channels || []).indexOf('whatsapp') !== -1; })));
+  }
+
+  function renderTelegramInbound() {
+    var wrap = document.getElementById('tg-inbound-wrap');
+    if (!wrap) return;
+    if (state.newsErr) {
+      wrap.innerHTML = '<div class="ch-error-inline">טעינה נכשלה — ' + AdminShell.escapeHtml(state.newsErr) + '. <button class="admin-btn" type="button" data-retry-news>נסה שוב</button></div>';
+      var btn = wrap.querySelector('[data-retry-news]');
+      if (btn) btn.addEventListener('click', loadNews);
+      return;
+    }
+    var items = state.news.filter(function (n) {
+      return (n.channels || []).indexOf('telegram-source') !== -1;
+    });
+    if (!items.length) {
+      wrap.innerHTML = '<div class="ch-empty-inline">לא נמצאו ידיעות שהגיעו מ-Telegram (channels = <code style="font-family:\'JetBrains Mono\',monospace">telegram-source</code>).</div>';
+      return;
+    }
+    items.sort(function (a, b) {
+      return new Date(b.publishedAt || b._updatedAt || 0).getTime()
+           - new Date(a.publishedAt || a._updatedAt || 0).getTime();
+    });
+    items = items.slice(0, 10);
+    var rows = items.map(function (n) {
+      var slug = n.slug || '';
+      var status = n.status === 'published' ? AdminShell.pill('published', 'published') : AdminShell.pill('draft');
+      return '<tr>'
+        + '<td>' + AdminShell.escapeHtml(n.headline || '(ללא כותרת)') + '</td>'
+        + '<td>' + AdminShell.fmtTime(n.publishedAt || n._updatedAt) + '</td>'
+        + '<td>' + status + '</td>'
+        + '<td class="admin-row-actions">'
+        +   '<a class="admin-btn" href="news.html">פתח ב-/admin</a>'
+        +   '<a class="admin-btn" href="../news.html#' + encodeURIComponent(slug) + '" target="_blank">פיד</a>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<div class="admin-table-wrap">'
+      + '<table class="admin-table">'
+      + '<thead><tr><th>כותרת</th><th>נכנס</th><th>סטטוס</th><th></th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function renderDiag(health, err) {
+    var secretEl = document.getElementById('diag-secret');
+    var sanityEl = document.getElementById('diag-sanity');
+
+    function paint(el, label, ok, msg) {
+      el.classList.remove('is-on', 'is-off');
+      el.classList.add(ok ? 'is-on' : 'is-off');
+      el.innerHTML =
+        '<span class="ch-diag-label">' + AdminShell.escapeHtml(label) + '</span>'
+        + '<span class="ch-diag-val">' + AdminShell.escapeHtml(msg) + '</span>';
+    }
+
+    if (err) {
+      paint(secretEl, 'Webhook secret', false, 'שגיאה: ' + (err.message || err));
+      paint(sanityEl, 'Sanity', false, 'שגיאה: ' + (err.message || err));
+      pillFor('telegram', false);
+      return;
+    }
+
+    var sec = !!(health && health.secret_set);
+    var san = !!(health && health.sanity_configured);
+    paint(secretEl, 'Webhook secret', sec, sec ? '✓ מוגדר' : '✗ חסר');
+    paint(sanityEl, 'Sanity', san, san ? '✓ מוגדר' : '✗ חסר');
+    pillFor('telegram', sec && san);
+  }
+
+  async function loadNews() {
+    document.getElementById('tg-inbound-wrap').innerHTML = '<div class="admin-empty" style="padding:18px">טוען...</div>';
+    state = { news: [], newsErr: null };
+    try {
+      var d = await AdminShell.loadList('/api/list-news');
+      state.news = d.news || [];
+    } catch (e) {
+      state.newsErr = e.message || 'unknown';
+    }
+    renderChannelCounts();
+    renderTelegramInbound();
+  }
+
+  async function loadTelegramHealth() {
+    try {
+      var res = await fetch('/api/telegram-webhook', { method: 'GET' });
+      var text = await res.text();
+      var data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (_) { data = {}; }
+      if (!res.ok) throw new Error('GET /api/telegram-webhook → ' + res.status);
+      renderDiag(data, null);
+    } catch (e) {
+      renderDiag(null, e);
+    }
+  }
+
+  function refreshAll() {
+    loadNews();
+    loadTelegramHealth();
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', refreshAll);
+
+  refreshAll();
+})();
+</script>
 </body>
 </html>
