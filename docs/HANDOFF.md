@@ -66,13 +66,20 @@
 
 עד שזה ייעשה: `/api/save-article`, `/api/save-news`, `/api/delete-*` יחזירו `sanity_error` (401). הקריאות הציבוריות (`list-articles`, `list-news`) ימשיכו לעבוד אם ה-dataset ציבורי, אחרת ידרשו `SANITY_READ_TOKEN` (אופציונלי).
 
-### 2. הוסף `news` document type ל-Sanity Studio שלך (10 דק׳)
+### 2. פרוס את ה-Sanity Studio שב-`studio/` (5 דק׳)
 
-ה-schema המלא ב-[SCHEMA-NEWS.md](SCHEMA-NEWS.md). אם ה-Studio שלך הוא:
-- **Hosted (sanity.io/manage)** → Schema → Add document type → הדבק את ההגדרה.
-- **Self-hosted (קוד נפרד)** → צור `schemas/documents/news.ts` עם התוכן, רשום ב-`schemas/index.ts`, ו-`sanity deploy`.
+הוספתי studio מלא בקוד תחת `studio/` (מירור של thelaw — schemas של `article`, `news`, `aiStudioSettings`, ועוד 7 object types נחוצים ל-portable text). פעם אחת תריץ:
 
-לאחר זה, יצירת ידיעה מ-`/E - Newsroom Workbench/admin/news.html` → "+ ידיעה מהירה" תייצר מסמך אמיתי, והוא יופיע בפיד `/news.html` ובכרטיסי ה-chat widget בעמוד הבית.
+```powershell
+cd studio
+pnpm install              # או npm install
+pnpm sanity login          # התחבר לחשבון Sanity שלך
+pnpm sanity deploy         # מעלה ל-<hostname>.sanity.studio (בחר hostname פעם אחת)
+```
+
+מעכשיו תערוך schemas בקוד (TypeScript) + `pnpm sanity deploy` במקום sanity.io/manage UI.
+
+ראה [studio/README.md](../studio/README.md) להוראות מפורטות.
 
 ### 3. הגדר `v5_editor_secret` בדפדפן (פעם אחת לדפדפן, 30 שניות)
 
@@ -144,7 +151,8 @@ npx wrangler pages dev . --port 8788 `
 |---|---|
 | [STATUS-PROGRESS.md](STATUS-PROGRESS.md) | סטטוס מפורט phase by phase, gotchas, וגילויים |
 | [ROADMAP.md](ROADMAP.md) | Phase 2C, Phase 3, Telegram bridge — תכנון מפורט |
-| [SCHEMA-NEWS.md](SCHEMA-NEWS.md) | ה-schema של news ל-Sanity (להדבקה ידנית) |
+| [SCHEMA-NEWS.md](SCHEMA-NEWS.md) | snippet עצמאי של ה-schema (כבר משולב ב-`studio/` המלא) |
+| [studio/README.md](../studio/README.md) | הסטודיו המלא — schemas, deploy, חידוש טוקנים |
 | [EDITOR_SETUP.md](../E%20-%20Newsroom%20Workbench/EDITOR_SETUP.md) | הוראות התקנה ראשונית של העורך + wrangler dev |
 | `/E - Newsroom Workbench/updates.html` | אותה מידע אבל כעמוד באתר עצמו (Kanban + collapsibles) |
 
