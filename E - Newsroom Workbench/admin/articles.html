@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>nVision Studio · מאמרים</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+<div class="admin-shell">
+  <header class="admin-top">
+    <div class="admin-brand">
+      <div class="admin-brand-mark">n.</div>
+      <div class="admin-brand-name"><strong>nVision Studio</strong><span>VIBE CODE NEWS · STUDIO</span></div>
+    </div>
+    <div class="admin-top-right">
+      <a href="../index.html">← חזרה לאתר</a>
+      <a href="../articles.html">לתצוגת ספרייה (קוראים)</a>
+    </div>
+  </header>
+  <div class="admin-body">
+    <nav class="admin-nav" data-admin-nav></nav>
+    <main class="admin-main">
+      <div class="admin-page-head">
+        <div>
+          <p class="eyebrow">CONTENT · ARTICLES</p>
+          <h1>מאמרים</h1>
+        </div>
+        <div class="admin-page-actions">
+          <a class="admin-btn is-primary" href="../article.html?action=new">+ מאמר חדש</a>
+          <a class="admin-btn" href="../articles.html?tab=library">פתח עורך מלא ↗</a>
+        </div>
+      </div>
+
+      <div class="admin-table-wrap" id="articles-table-wrap">
+        <div class="admin-empty">טוען רשימת מאמרים...</div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="admin.js"></script>
+<script>
+  (async function () {
+    var wrap = document.getElementById('articles-table-wrap');
+    try {
+      var data = await AdminShell.loadList('/api/list-articles');
+      var list = data.articles || [];
+      if (!list.length) {
+        wrap.innerHTML = '<div class="admin-empty">לא נמצאו מאמרים. <a href="../article.html?action=new">צור את הראשון</a>.</div>';
+        return;
+      }
+      var rows = list.map(function (a) {
+        var slug = a.slug || '';
+        return '<tr>'
+          + '<td>' + AdminShell.escapeHtml(a.title || '(ללא כותרת)') + '</td>'
+          + '<td><code>' + AdminShell.escapeHtml(slug) + '</code></td>'
+          + '<td>' + (a.status === 'published' ? AdminShell.pill('publish', 'published') : AdminShell.pill('draft')) + '</td>'
+          + '<td>' + AdminShell.fmtTime(a.publishedAt || a._updatedAt) + '</td>'
+          + '<td class="admin-row-actions">'
+          + '<a class="admin-btn" href="../article.html?action=edit&slug=' + encodeURIComponent(slug) + '">ערוך</a>'
+          + '<a class="admin-btn" href="../article.html?action=view&slug=' + encodeURIComponent(slug) + '">צפה</a>'
+          + '<button class="admin-btn is-danger" data-delete="' + AdminShell.escapeHtml(slug) + '">מחק</button>'
+          + '</td>'
+          + '</tr>';
+      }).join('');
+      wrap.innerHTML = '<table class="admin-table">'
+        + '<thead><tr><th>כותרת</th><th>slug</th><th>סטטוס</th><th>עודכן</th><th></th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>';
+
+      wrap.querySelectorAll('[data-delete]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var s = btn.getAttribute('data-delete');
+          if (!confirm('למחוק את "' + s + '"?')) return;
+          try {
+            await AdminShell.deleteBySlug('/api/delete-article', s);
+            location.reload();
+          } catch (e) {
+            alert('Delete failed: ' + e.message);
+          }
+        });
+      });
+    } catch (e) {
+      wrap.innerHTML = '<div class="admin-empty">שגיאה בטעינת מאמרים: ' + AdminShell.escapeHtml(e.message) + '</div>';
+    }
+  })();
+</script>
+</body>
+</html>

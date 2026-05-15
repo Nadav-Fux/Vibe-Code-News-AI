@@ -43,6 +43,9 @@ These are injected into the static JS bundle by `.github/scripts/inject-env.js` 
 | `SANITY_READ_TOKEN`    | (Optional) only if `/api/list-articles` needs a private dataset |
 | `SANITY_WRITE_TOKEN`   | Sanity Editor token. **Lives only here.** |
 | `EDITOR_SECRET`        | A long random string (e.g. `openssl rand -hex 32`). The browser will send this back in `X-Editor-Secret`. |
+| `AI_PROVIDER`          | `groq` (default). Reserved — future values: `openai`, `anthropic`, `workers-ai`. |
+| `AI_MODEL`             | Optional override. Defaults to `llama-3.3-70b-versatile` for Groq. |
+| `GROQ_API_KEY`         | Groq cloud API key. Required when `AI_PROVIDER=groq`. Used by `/api/ai-format`. |
 
 These env vars are read at request time by the Pages Functions in `functions/api/`. They're never injected into the static bundle.
 
@@ -86,6 +89,18 @@ Stored in `localStorage` under `v5_editor_secret`. Required per browser; not syn
 - `POST /api/save-article` — `{ title, slug, blocks }`, header `X-Editor-Secret`. Returns `{ ok, action: 'created' | 'updated' }`.
 - `POST /api/delete-article` — `{ slug }`, header `X-Editor-Secret`. Returns `{ ok }`.
 - `GET /api/list-articles` — Public. Returns all published articles from Sanity for listing UIs.
+
+## Local dev (running Pages Functions)
+
+```powershell
+npx wrangler pages dev . --port 8788 `
+  --compatibility-date 2025-01-01 `
+  --compatibility-flags=nodejs_compat
+```
+
+The `nodejs_compat` flag is recommended even though our current functions don't need `process.env` — the moment any imported module touches `process.env` transitively, `wrangler pages dev` cold-starts will throw `ReferenceError: process is not defined`. Documented gotcha from a sister project.
+
+Then open `http://localhost:8788/E - Newsroom Workbench/news.html` (or any page) — the static files are served and `/api/*` routes hit the local functions.
 
 ## Troubleshooting
 

@@ -137,7 +137,7 @@ const V5_TEMPLATE_RELATED = [
 
 const V5_LINKS = {
   home: 'index.html#home',
-  news: 'index.html#news',
+  news: 'news.html',
   articles: 'articles.html',
   article: 'article.html',
   articleDemo: 'article.html?view=demo',
@@ -596,6 +596,7 @@ function V5Title() {
 
 function V5Chat(_ref) {
   var skin = _ref.skin;
+  var feed = _ref.feed && _ref.feed.length ? _ref.feed : V5_FEED;
   var scrollerRef = useV5R(null);
   var _useState4 = useV5S(3);
   var shown = _useState4[0], setShown = _useState4[1];
@@ -603,14 +604,14 @@ function V5Chat(_ref) {
   var typing = _useState5[0], setTyping = _useState5[1];
 
   useV5E(function() {
-    if (shown >= V5_FEED.length) return;
+    if (shown >= feed.length) return;
     var t = setTimeout(function() {
       setTyping(true);
       var t2 = setTimeout(function() { setTyping(false); setShown(function(s) { return s + 1; }); }, 1100);
       return function() { clearTimeout(t2); };
     }, 2800);
     return function() { clearTimeout(t); };
-  }, [shown]);
+  }, [shown, feed]);
 
   useV5E(function() {
     if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
@@ -620,7 +621,7 @@ function V5Chat(_ref) {
     React.createElement(V5ChatHeader, { skin: skin, typing: typing }),
     React.createElement('div', { ref: scrollerRef, className: 'v5-chat-body' },
       React.createElement('div', { className: 'v5-chat-bg' }),
-      V5_FEED.slice(0, shown).map(function(m, i) {
+      feed.slice(0, shown).map(function(m, i) {
         if (m.type === 'system') return React.createElement('div', { key: i, className: 'v5-system' }, React.createElement('span', null, m.text));
         return React.createElement('div', { key: i, className: 'v5-msg-row skin-' + skin },
           React.createElement('div', { className: 'v5-bubble' },
@@ -728,9 +729,43 @@ function V5Sparkline(_ref4) {
 
 // ============== NEWSROOM ==============
 
+// Map a Sanity `news` document into the chat-feed bubble shape.
+function v5NewsToFeedMessage(n) {
+  var iso = n.publishedAt || n._createdAt || new Date().toISOString();
+  var d;
+  try { d = new Date(iso); } catch (_) { d = new Date(); }
+  var hh = String(d.getHours()).padStart(2, '0');
+  var mm = String(d.getMinutes()).padStart(2, '0');
+  var tag = (V5_CATEGORY_LABELS && V5_CATEGORY_LABELS[n.category]) || n.category || 'חדשות';
+  var text = n.headline || '';
+  if (n.dek) text = text + ' — ' + n.dek;
+  return {
+    type: 'msg',
+    time: hh + ':' + mm,
+    tag: tag,
+    text: text,
+    urgent: n.urgency === 'breaking' || n.urgency === 'high',
+  };
+}
+
 function V5Newsroom() {
   var _useState6 = useV5S('whatsapp');
   var skin = _useState6[0], setSkin = _useState6[1];
+  var _liveFeed = useV5S(null);
+  var liveFeed = _liveFeed[0], setLiveFeed = _liveFeed[1];
+
+  useV5E(function() {
+    var aborted = false;
+    fetch('/api/list-news').then(function(r) { return r.ok ? r.json() : null; }).then(function(j) {
+      if (aborted || !j || !Array.isArray(j.news) || !j.news.length) return;
+      // chat feed = today header + last 5 news, oldest first (so newest sits at bottom)
+      var sorted = j.news.slice(0, 5).reverse();
+      var today = new Date().toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+      var mapped = [{ type: 'system', text: 'היום · ' + today }].concat(sorted.map(v5NewsToFeedMessage));
+      setLiveFeed(mapped);
+    }).catch(function() { /* fall back to V5_FEED */ });
+    return function() { aborted = true; };
+  }, []);
 
   return React.createElement('section', { id: 'news', className: 'v5-newsroom' },
     React.createElement('div', { className: 'v5-newsroom-head' },
@@ -753,7 +788,7 @@ function V5Newsroom() {
         React.createElement('div', { className: 'v5-phone' },
           React.createElement('div', { className: 'v5-phone-notch' }),
           React.createElement('div', { className: 'v5-phone-screen' },
-            React.createElement(V5Chat, { skin: skin })
+            React.createElement(V5Chat, { skin: skin, feed: liveFeed })
           )
         )
       ),
@@ -806,11 +841,51 @@ function V5Newsroom() {
 
 // ============== ARTICLE WALL ==============
 
+var V5_POSTIT_COLORS = ['mustard', 'sky', 'sage', 'lavender', 'rose', 'paper'];
+
+function v5ExtractFirstParagraph(blocks) {
+  if (!Array.isArray(blocks)) return '';
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    if (b && b._type === 'block' && b.style === 'normal' && Array.isArray(b.children)) {
+      var txt = b.children.map(function (c) { return c && c.text ? c.text : ''; }).join(' ').trim();
+      if (txt) return txt.slice(0, 180);
+    }
+  }
+  return '';
+}
+
+function v5SanityArticleToPostit(a, idx) {
+  return {
+    id: a._id || a.slug || 'art-' + idx,
+    slug: a.slug || '',
+    cat: 'GUIDE',
+    color: V5_POSTIT_COLORS[idx % V5_POSTIT_COLORS.length],
+    tag: 'מאמר',
+    title: a.title || '(ללא כותרת)',
+    body: v5ExtractFirstParagraph(a.content) || '— ',
+    author: 'מערכת',
+    read: '— ',
+  };
+}
+
 function V5ArticleWall() {
   var _useState7 = useV5S('ALL');
   var filter = _useState7[0], setFilter = _useState7[1];
+  var _live = useV5S(null);
+  var liveArticles = _live[0], setLiveArticles = _live[1];
+
+  useV5E(function() {
+    var aborted = false;
+    fetch('/api/list-articles').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (aborted || !j || !Array.isArray(j.articles) || !j.articles.length) return;
+      setLiveArticles(j.articles.slice(0, V5_POS.length).map(v5SanityArticleToPostit));
+    }).catch(function () { /* keep demo */ });
+    return function () { aborted = true; };
+  }, []);
+
+  var articles = liveArticles && liveArticles.length ? liveArticles : V5_ARTICLES;
   var cats = ['ALL', 'OPINION', 'GUIDE', 'TOOLS', 'DEEP DIVE', 'BENCH'];
-  var filtered = filter === 'ALL' ? V5_ARTICLES : V5_ARTICLES.filter(function(a) { return a.cat === filter; });
 
   return React.createElement('section', { id: 'tools', className: 'v5-wall' },
     React.createElement('div', { className: 'v5-sec-head' },
@@ -828,7 +903,7 @@ function V5ArticleWall() {
       )
     ),
     React.createElement('div', { className: 'v5-wall-stage' },
-      V5_ARTICLES.map(function(a, i) {
+      articles.map(function(a, i) {
         var visible = filter === 'ALL' || a.cat === filter;
         return React.createElement(V5ArticlePostit, { key: a.id, a: a, pos: V5_POS[i], visible: visible });
       })
@@ -1261,6 +1336,269 @@ function V5ArticlesPage() {
   return React.createElement(window.V5MyArticlesV2);
 }
 
+// ============== NEWS PAGE ==============
+// Hybrid feed: timeline (default) ↔ grid toggle.
+// Each item is a NewsCard with three open modes: inline expand, popup modal,
+// WhatsApp deep-link share.
+
+var V5_NEWS_FALLBACK = [
+  {
+    _id: 'fallback-1',
+    headline: 'Claude Opus 4.7 משחרר context window של מיליון טוקנים',
+    dek: 'Anthropic מכריזה על תמיכה מלאה ב-1M context, זמין דרך API ו-Claude Code.',
+    body: 'הכרזה רשמית מבית Anthropic על הרחבת window הקונטקסט ב-Opus 4.7 למיליון טוקנים. הגרסה כבר זמינה דרך ה-CLI של Claude Code עם דגל 1m. המשמעות: ניתוח codebases שלמים בקריאה אחת.',
+    category: 'release',
+    urgency: 'high',
+    channels: ['web', 'telegram'],
+    slug: 'opus-4-7-1m-context',
+    source: 'Anthropic',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+  },
+  {
+    _id: 'fallback-2',
+    headline: 'n8n v2 בדרך — workflow editor חדש ו-AI agents native',
+    dek: 'גרסה חדשה של n8n כוללת ממשק עורך משופר ותמיכה ב-LLM nodes כשרכיב מובנה.',
+    body: 'הצוות של n8n פרסם roadmap לגרסה 2 שתכלול editor חדש מבוסס React 18, AI nodes מובנים ל-OpenAI/Anthropic/Groq, ושיפורי ביצועים משמעותיים ב-execution engine.',
+    category: 'update',
+    urgency: 'normal',
+    channels: ['web'],
+    slug: 'n8n-v2-roadmap',
+    source: 'n8n blog',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+  },
+  {
+    _id: 'fallback-3',
+    headline: 'Sanity מציגה Studio v4 עם AI Actions מובנות',
+    dek: 'הכלי הפופולרי ל-headless CMS מוסיף actions אוטומטיות בעזרת LLMs בתוך ה-Studio.',
+    body: 'Sanity Studio v4 מציגה plugin חדש שמאפשר ליצור document actions עם prompt templates, ולשלוח את התוכן ל-LLM endpoint משלך לעיבוד נוסף לפני שמירה.',
+    category: 'release',
+    urgency: 'normal',
+    channels: ['web', 'telegram'],
+    slug: 'sanity-studio-v4',
+    source: 'Sanity',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+  },
+  {
+    _id: 'fallback-4',
+    headline: 'Cloudflare Workers AI מוסיף Llama 4 70B ל-edge',
+    dek: 'מודל חדש זמין דרך Workers AI ללא קונפיגורציה — fan-out automatic ל-edge.',
+    body: 'Cloudflare הוסיפה את llama-4-70b-instruct לרשימת המודלים הזמינים דרך Workers AI binding. ה-inference רץ ב-edge הקרוב למשתמש, latency ממוצע ~280ms.',
+    category: 'release',
+    urgency: 'normal',
+    channels: ['web'],
+    slug: 'workers-ai-llama-4',
+    source: 'Cloudflare',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+  },
+  {
+    _id: 'fallback-5',
+    headline: 'OpenAI Codex SDK יוצא מ-beta — אינטגרציה ל-VS Code',
+    dek: 'גרסה יציבה של ה-SDK ל-Codex כעת זמינה, כולל extension רשמי ל-VS Code.',
+    body: 'אחרי 8 חודשים ב-beta, ה-Codex SDK עובר ל-GA. ה-extension החדש ל-VS Code תומך ב-inline completions, chat, ו-multi-file edits בסגנון Aider.',
+    category: 'update',
+    urgency: 'low',
+    channels: ['web'],
+    slug: 'codex-sdk-ga',
+    source: 'OpenAI',
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 22).toISOString(),
+  },
+];
+
+var V5_CATEGORY_LABELS = {
+  breaking: 'דחוף',
+  update: 'עדכון',
+  analysis: 'ניתוח',
+  release: 'שחרור',
+  rumor: 'שמועה',
+  'guide-short': 'מדריך קצר',
+};
+
+var V5_URGENCY_DOT = {
+  breaking: '#e74c3c',
+  high: '#e69138',
+  normal: '#88a884',
+  low: '#bab3a2',
+};
+
+function v5FormatRelative(iso) {
+  if (!iso) return '';
+  var diffMs = Date.now() - new Date(iso).getTime();
+  var mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'עכשיו';
+  if (mins < 60) return 'לפני ' + mins + ' דק׳';
+  var hrs = Math.round(mins / 60);
+  if (hrs < 24) return 'לפני ' + hrs + ' שע׳';
+  var days = Math.round(hrs / 24);
+  if (days < 7) return 'לפני ' + days + ' ימים';
+  return new Date(iso).toLocaleDateString('he-IL');
+}
+
+function v5BuildShareText(item) {
+  var lines = [item.headline];
+  if (item.dek) lines.push('', item.dek);
+  if (typeof window !== 'undefined') {
+    lines.push('', window.location.origin + '/E - Newsroom Workbench/news.html#' + (item.slug || item._id));
+  }
+  return lines.join('\n');
+}
+
+function V5NewsCard(_ref) {
+  var item = _ref.item;
+  var view = _ref.view || 'timeline';
+  var _expand = useV5S(false);
+  var expanded = _expand[0], setExpanded = _expand[1];
+  var _modal = _ref.onOpenPopup;
+
+  var urgency = V5_URGENCY_DOT[item.urgency] || V5_URGENCY_DOT.normal;
+  var categoryLabel = V5_CATEGORY_LABELS[item.category] || item.category || '';
+  var relative = v5FormatRelative(item.publishedAt || item._createdAt);
+
+  function openWhatsApp(e) {
+    e.stopPropagation();
+    var text = encodeURIComponent(v5BuildShareText(item));
+    window.open('https://wa.me/?text=' + text, '_blank', 'noopener');
+  }
+  function openPopup(e) {
+    e.stopPropagation();
+    if (_modal) _modal(item);
+  }
+  function openInline(e) {
+    if (e.target.closest('button')) return;
+    setExpanded(!expanded);
+  }
+
+  return React.createElement('article', {
+    className: 'v5-news-card' + (view === 'grid' ? ' is-grid' : ' is-timeline') + (expanded ? ' is-open' : ''),
+    onClick: openInline,
+    role: 'button',
+    tabIndex: 0,
+    'data-urgency': item.urgency || 'normal',
+  },
+    React.createElement('div', { className: 'v5-news-meta' },
+      React.createElement('span', { className: 'v5-news-dot', style: { background: urgency } }),
+      categoryLabel && React.createElement('span', { className: 'v5-news-cat' }, categoryLabel),
+      React.createElement('span', { className: 'v5-news-time mono' }, relative),
+      item.source && React.createElement('span', { className: 'v5-news-source' }, '· ' + item.source)
+    ),
+    React.createElement('h3', { className: 'v5-news-headline' }, item.headline),
+    item.dek && React.createElement('p', { className: 'v5-news-dek' }, item.dek),
+    expanded && item.body && React.createElement('div', { className: 'v5-news-body' },
+      item.body.split(/\n+/).map(function(p, i) {
+        return React.createElement('p', { key: i }, p);
+      })
+    ),
+    React.createElement('div', { className: 'v5-news-actions' },
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-btn',
+        onClick: function(e) { e.stopPropagation(); setExpanded(!expanded); },
+      }, expanded ? 'סגור' : 'הרחב כאן'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-btn',
+        onClick: openPopup,
+      }, 'פתח ב־popup ↗'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'v5-news-btn v5-news-btn-wa',
+        onClick: openWhatsApp,
+      }, 'WhatsApp')
+    )
+  );
+}
+
+function V5NewsModal(_ref2) {
+  var item = _ref2.item, onClose = _ref2.onClose;
+  useV5E(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return function() {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, []);
+  if (!item) return null;
+  return React.createElement('div', { className: 'v5-news-modal-backdrop', onClick: onClose },
+    React.createElement('div', { className: 'v5-news-modal', onClick: function(e) { e.stopPropagation(); } },
+      React.createElement('button', { type: 'button', className: 'v5-news-modal-close', onClick: onClose, 'aria-label': 'סגור' }, '×'),
+      React.createElement('div', { className: 'v5-news-modal-meta' },
+        React.createElement('span', { className: 'v5-news-dot', style: { background: V5_URGENCY_DOT[item.urgency] || V5_URGENCY_DOT.normal } }),
+        React.createElement('span', { className: 'v5-news-cat' }, V5_CATEGORY_LABELS[item.category] || ''),
+        React.createElement('span', { className: 'v5-news-time mono' }, v5FormatRelative(item.publishedAt))
+      ),
+      React.createElement('h2', { className: 'v5-news-modal-headline' }, item.headline),
+      item.dek && React.createElement('p', { className: 'v5-news-modal-dek' }, item.dek),
+      item.body && React.createElement('div', { className: 'v5-news-modal-body' },
+        item.body.split(/\n+/).map(function(p, i) {
+          return React.createElement('p', { key: i }, p);
+        })
+      ),
+      item.sourceUrl && React.createElement('a', { className: 'v5-news-modal-source', href: item.sourceUrl, target: '_blank', rel: 'noopener' }, 'מקור: ' + (item.source || item.sourceUrl) + ' ↗')
+    )
+  );
+}
+
+function V5NewsPage() {
+  var _v = useV5S('timeline');
+  var view = _v[0], setView = _v[1];
+  var _items = useV5S(V5_NEWS_FALLBACK);
+  var items = _items[0], setItems = _items[1];
+  var _status = useV5S('demo');
+  var status = _status[0], setStatus = _status[1];
+  var _modal = useV5S(null);
+  var modalItem = _modal[0], setModalItem = _modal[1];
+
+  useV5E(function() {
+    var aborted = false;
+    fetch('/api/list-news').then(function(r) {
+      return r.ok ? r.json() : null;
+    }).then(function(j) {
+      if (aborted || !j) return;
+      if (Array.isArray(j.news) && j.news.length) {
+        setItems(j.news);
+        setStatus('live');
+      }
+    }).catch(function() { /* keep fallback */ });
+    return function() { aborted = true; };
+  }, []);
+
+  return React.createElement('section', { className: 'v5-news-page' },
+    React.createElement('header', { className: 'v5-news-head' },
+      React.createElement('div', null,
+        React.createElement('p', { className: 'v5-eyebrow mono' }, 'NEWSROOM · LIVE FEED'),
+        React.createElement('h1', { className: 'v5-news-title' }, 'מה חדש עכשיו'),
+        React.createElement('p', { className: 'v5-news-sub' }, status === 'demo'
+          ? 'דמו — חבר Sanity דרך /api/list-news לפיד אמיתי.'
+          : 'פיד חי, מתעדכן אוטומטית מ-Sanity.')
+      ),
+      React.createElement('div', { className: 'v5-news-view-toggle' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'v5-news-view-btn' + (view === 'timeline' ? ' is-active' : ''),
+          onClick: function() { setView('timeline'); },
+        }, 'טיימליין'),
+        React.createElement('button', {
+          type: 'button',
+          className: 'v5-news-view-btn' + (view === 'grid' ? ' is-active' : ''),
+          onClick: function() { setView('grid'); },
+        }, 'Grid')
+      )
+    ),
+    React.createElement('div', { className: 'v5-news-feed v5-news-feed-' + view },
+      items.map(function(item) {
+        return React.createElement(V5NewsCard, {
+          key: item._id || item.slug,
+          item: item,
+          view: view,
+          onOpenPopup: setModalItem,
+        });
+      })
+    ),
+    modalItem && React.createElement(V5NewsModal, { item: modalItem, onClose: function() { setModalItem(null); } })
+  );
+}
+
 function V5ArticlePage() {
   // action= overrides take precedence — so article.html?action=edit&slug=... opens the editor.
   var params = new URLSearchParams(window.location.search);
@@ -1297,11 +1635,15 @@ function V5ArticlePage() {
 function V5App(_ref15) {
   var page = _ref15.page;
   useV5Reveal();
-  var activeKey = page === 'articles' ? 'articles' : page === 'article' ? 'article' : 'home';
+  var activeKey = page === 'articles' ? 'articles'
+    : page === 'article' ? 'article'
+    : page === 'news' ? 'news'
+    : 'home';
   return React.createElement('div', { className: 'v5-root v5-page-' + page, dir: 'rtl' },
     React.createElement(V5Nav, { activeKey: activeKey }),
     page === 'articles' ? React.createElement(V5ArticlesPage) :
     page === 'article' ? React.createElement(V5ArticlePage) :
+    page === 'news' ? React.createElement(V5NewsPage) :
     React.createElement(V5HomePage),
     React.createElement(V5Foot)
   );
@@ -1315,6 +1657,9 @@ function mountVariationFive() {
   }
   if (page === 'articles') {
     document.title = 'nVision AI · Articles · Variation E';
+  }
+  if (page === 'news') {
+    document.title = 'nVision AI · News · Variation E';
   }
   ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(V5App, { page: page }));
 }

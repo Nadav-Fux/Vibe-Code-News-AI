@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>nVision Studio · סקירה</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+<div class="admin-shell">
+  <header class="admin-top">
+    <div class="admin-brand">
+      <div class="admin-brand-mark">n.</div>
+      <div class="admin-brand-name"><strong>nVision Studio</strong><span>VIBE CODE NEWS · STUDIO</span></div>
+    </div>
+    <div class="admin-top-right">
+      <a href="../index.html">← חזרה לאתר</a>
+      <a href="../news.html">פיד חדשות</a>
+      <a href="../articles.html">ספריית מאמרים</a>
+    </div>
+  </header>
+  <div class="admin-body">
+    <nav class="admin-nav" data-admin-nav></nav>
+    <main class="admin-main">
+      <div class="admin-page-head">
+        <div>
+          <p class="eyebrow">OVERVIEW</p>
+          <h1>סקירה</h1>
+        </div>
+        <div class="admin-page-actions">
+          <a class="admin-btn is-primary" href="../article.html?action=new">+ מאמר חדש</a>
+          <a class="admin-btn" href="news.html">חדשות</a>
+        </div>
+      </div>
+
+      <div class="admin-grid" id="overview-stats">
+        <div class="admin-stat">
+          <div class="admin-stat-label">מאמרים פעילים</div>
+          <div class="admin-stat-value" data-stat="articles">—</div>
+          <div class="admin-stat-hint">מתוך Sanity · /api/list-articles</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">ידיעות חדשות</div>
+          <div class="admin-stat-value" data-stat="news">—</div>
+          <div class="admin-stat-hint">מתוך Sanity · /api/list-news</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">ידיעות דחופות</div>
+          <div class="admin-stat-value" data-stat="breaking">—</div>
+          <div class="admin-stat-hint">urgency = breaking</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">לפרסום ב-Telegram</div>
+          <div class="admin-stat-value" data-stat="telegram">—</div>
+          <div class="admin-stat-hint">channels.includes("telegram") · Phase 2</div>
+        </div>
+      </div>
+
+      <div style="margin-top:28px;">
+        <h3 style="margin:0 0 10px;font-size:14px;letter-spacing:0.06em;text-transform:uppercase;color:var(--admin-dim);font-family:'JetBrains Mono',monospace">פעולות מהירות</h3>
+        <div class="admin-placeholder">
+          <p style="margin-top:0">
+            הסטודיו תומך כרגע בעריכת <strong>מאמרים</strong> דרך ספריית המאמרים, ובצפייה בידיעות <strong>חדשות</strong> מ-Sanity.
+            ה-Sanity schema של news מתועד ב-<code>docs/SCHEMA-NEWS.md</code> ויש לרשום אותו ב-studio שלך פעם אחת.
+          </p>
+          <p>
+            סטטיסטיקות אמיתיות + ערוצי הפצה (Telegram / WhatsApp) ייכנסו ב-Phase 2.
+          </p>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="admin.js"></script>
+<script>
+  (async function () {
+    async function safeCount(url, key) {
+      try {
+        var d = await AdminShell.loadList(url);
+        var arr = d.articles || d.news || [];
+        var el = document.querySelector('[data-stat="' + key + '"]');
+        if (el) el.textContent = String(arr.length);
+        return arr;
+      } catch (_) {
+        var el2 = document.querySelector('[data-stat="' + key + '"]');
+        if (el2) el2.textContent = '—';
+        return [];
+      }
+    }
+    var articles = await safeCount('/api/list-articles', 'articles');
+    var news = await safeCount('/api/list-news', 'news');
+    var breaking = news.filter(function (n) { return n.urgency === 'breaking'; }).length;
+    var tg = news.filter(function (n) { return (n.channels || []).indexOf('telegram') !== -1; }).length;
+    document.querySelector('[data-stat="breaking"]').textContent = String(breaking);
+    document.querySelector('[data-stat="telegram"]').textContent = String(tg);
+    void articles;
+  })();
+</script>
+</body>
+</html>

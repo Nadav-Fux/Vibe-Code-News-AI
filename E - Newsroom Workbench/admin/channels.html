@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>nVision Studio · ערוצים</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+<div class="admin-shell">
+  <header class="admin-top">
+    <div class="admin-brand">
+      <div class="admin-brand-mark">n.</div>
+      <div class="admin-brand-name"><strong>nVision Studio</strong><span>VIBE CODE NEWS · STUDIO</span></div>
+    </div>
+    <div class="admin-top-right"><a href="../index.html">← חזרה לאתר</a></div>
+  </header>
+  <div class="admin-body">
+    <nav class="admin-nav" data-admin-nav></nav>
+    <main class="admin-main">
+      <div class="admin-page-head">
+        <div>
+          <p class="eyebrow">DISTRIBUTION</p>
+          <h1>ערוצים</h1>
+        </div>
+      </div>
+      <div class="admin-placeholder">
+        <h3 style="margin-top:0">בפיתוח · Phase 2</h3>
+        <p>החיבור ל-Telegram + WhatsApp ייכנס כפונקציות נפרדות תחת <code>functions/api/publish-channel/</code>:</p>
+        <ul>
+          <li><strong>Telegram outbound:</strong> Bot API <code>sendMessage</code> לכל ידיעה עם <code>channels.includes("telegram")</code></li>
+          <li><strong>Telegram inbound:</strong> webhook → יצירת news draft</li>
+          <li><strong>WhatsApp outbound:</strong> Business Cloud API · message template</li>
+          <li><strong>WhatsApp inbound:</strong> webhook → news draft (אופציונלי)</li>
+        </ul>
+        <p>סודות הבוטים יישמרו ב-Cloudflare Pages env vars (<code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_CHANNEL_ID</code>, <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>) — לא ב-localStorage או בקליינט.</p>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>
