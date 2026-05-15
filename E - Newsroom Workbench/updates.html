@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>nVision AI · עדכונים ותכנון · Variation E</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="v5-styles.css"/>
+<link rel="stylesheet" href="v5-editor.css"/>
+<style>
+/* ── Updates page — scoped styles ── */
+.up-root {
+  background: var(--v5-paper);
+  color: var(--v5-ink);
+  font-family: 'Heebo', sans-serif;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ── Top bar ── */
+.up-topbar {
+  position: sticky; top: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 36px;
+  background: rgba(244,240,232,0.88);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.up-topbar-brand {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em;
+}
+.up-topbar-brand .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; font-weight: 400; letter-spacing: 0.14em;
+  color: var(--v5-dim); display: block; margin-top: 1px;
+}
+.up-back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+  color: var(--v5-ink-2);
+  padding: 7px 14px;
+  border: 1.5px solid var(--v5-line-2);
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.up-back-btn:hover { border-color: var(--v5-ink); color: var(--v5-cobalt); }
+
+/* ── Hero ── */
+.up-hero {
+  padding: 64px 40px 52px;
+  border-bottom: 1.5px solid var(--v5-ink);
+  position: relative; overflow: hidden;
+}
+.up-hero-grid {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(to right,  var(--v5-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--v5-grid) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.3;
+}
+.up-hero-inner {
+  position: relative; z-index: 1;
+  max-width: 860px; margin: 0 auto; text-align: center;
+}
+.up-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.22em; font-weight: 700;
+  color: var(--v5-sage); text-transform: uppercase;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-bottom: 20px;
+}
+.up-eyebrow::before, .up-eyebrow::after {
+  content: ''; flex: 0 0 48px; height: 1px; background: var(--v5-sage);
+}
+.up-hero h1 {
+  font-size: clamp(40px, 7vw, 80px);
+  font-weight: 900; letter-spacing: -0.04em;
+  line-height: 0.92; margin: 0 0 14px;
+}
+.up-hero h1 .serif {
+  font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400;
+  color: var(--v5-cobalt); font-size: 1.05em;
+}
+.up-hero-sub {
+  font-size: 15px; color: var(--v5-dim); margin-top: 10px; letter-spacing: 0.01em;
+}
+.up-date-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--v5-ink); color: var(--v5-paper);
+  padding: 7px 18px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.04em; font-family: 'JetBrains Mono', monospace;
+  margin-top: 22px;
+  box-shadow: 4px 5px 0 var(--v5-sage);
+}
+.up-pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--v5-acid); animation: v5pulse 1.6s infinite;
+}
+
+/* ── Kanban columns ── */
+.up-kanban {
+  max-width: 1100px; margin: 0 auto;
+  padding: 48px 32px 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .up-kanban { grid-template-columns: 1fr; }
+}
+
+.up-col-head {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--v5-dim);
+  margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.up-col-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.up-col-count {
+  margin-inline-start: auto;
+  background: var(--v5-ink); color: var(--v5-paper);
+  font-size: 9px; padding: 1px 7px; letter-spacing: 0.1em;
+}
+
+/* ── Status cards ── */
+.up-card {
+  border: 1.5px solid var(--v5-ink);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  box-shadow: 4px 5px 0 var(--v5-ink);
+  background: var(--v5-paper);
+  position: relative;
+}
+.up-card:last-child { margin-bottom: 0; }
+
+.up-card-top {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 10px;
+  margin-bottom: 6px;
+}
+.up-card-title {
+  font-size: 13.5px; font-weight: 700; line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+.up-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 3px;
+  flex-shrink: 0; white-space: nowrap;
+  font-weight: 600;
+}
+.up-pill-done    { background: rgba(136,168,132,0.18); color: var(--v5-sage); border: 1px solid var(--v5-sage); }
+.up-pill-wip     { background: rgba(200,216,90,0.18);  color: #7a8a00;        border: 1px solid var(--v5-mustard); }
+.up-pill-planned { background: rgba(63,109,246,0.10);  color: var(--v5-cobalt); border: 1px solid var(--v5-cobalt); }
+
+.up-card-desc {
+  font-size: 12px; color: var(--v5-dim); line-height: 1.5;
+  margin-bottom: 0;
+}
+.up-card-path {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.04em;
+  color: var(--v5-cobalt);
+  background: rgba(63,109,246,0.08);
+  padding: 1px 6px; margin-top: 8px;
+}
+
+/* accent borders per column */
+.up-col-done  .up-card { box-shadow: 4px 5px 0 var(--v5-sage); }
+.up-col-wip   .up-card { box-shadow: 4px 5px 0 var(--v5-mustard); }
+.up-col-plan  .up-card { box-shadow: 4px 5px 0 var(--v5-cobalt); }
+
+/* ── Warning banner ── */
+.up-warn {
+  max-width: 1100px; margin: 32px auto 0;
+  padding: 0 32px;
+}
+.up-warn-box {
+  border: 1.5px solid var(--v5-rose);
+  background: rgba(211,171,199,0.10);
+  padding: 16px 20px;
+  box-shadow: 4px 5px 0 var(--v5-rose);
+}
+.up-warn-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em;
+  color: var(--v5-rose); margin-bottom: 10px; text-transform: uppercase;
+}
+.up-warn-body {
+  font-size: 12.5px; line-height: 1.6; color: var(--v5-ink-2);
+}
+.up-warn-body code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; background: rgba(211,171,199,0.2);
+  padding: 1px 5px; color: var(--v5-rose);
+}
+
+/* ── Collapsible detail sections ── */
+.up-detail-section {
+  max-width: 1100px; margin: 48px auto 0;
+  padding: 0 32px;
+}
+.up-detail-section h2 {
+  font-size: 22px; font-weight: 900; letter-spacing: -0.03em;
+  margin: 0 0 28px;
+  display: flex; align-items: center; gap: 12px;
+}
+.up-detail-section h2 .serif {
+  font-family: 'Instrument Serif', serif; font-style: italic;
+  font-weight: 400; color: var(--v5-cobalt);
+}
+.up-detail-section h2::after {
+  content: ''; flex: 1; height: 1.5px; background: var(--v5-ink);
+}
+
+details.up-phase {
+  border: 1.5px solid var(--v5-ink);
+  margin-bottom: 16px;
+  background: var(--v5-paper);
+}
+details.up-phase summary {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  list-style: none;
+  user-select: none;
+}
+details.up-phase summary::-webkit-details-marker { display: none; }
+details.up-phase summary::after {
+  content: '▸';
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--v5-dim);
+  margin-inline-start: auto;
+  transition: transform 0.2s;
+}
+details.up-phase[open] summary::after { transform: rotate(90deg); }
+details.up-phase[open] { box-shadow: 5px 6px 0 var(--v5-cobalt); }
+
+.up-phase-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid var(--v5-line);
+}
+.up-phase-body ul {
+  list-style: none; padding: 0; margin: 16px 0 0;
+}
+.up-phase-body ul li {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--v5-line);
+  font-size: 13px; line-height: 1.5;
+}
+.up-phase-body ul li:last-child { border-bottom: none; }
+.up-phase-body ul li .up-item-icon {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--v5-cobalt);
+  flex-shrink: 0; padding-top: 2px;
+  min-width: 18px;
+}
+.up-phase-body p {
+  font-size: 12.5px; color: var(--v5-dim);
+  line-height: 1.6; margin: 12px 0 0;
+}
+.up-phase-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+  padding: 2px 9px; border-radius: 3px;
+}
+.up-phase-badge-wip  { background: rgba(200,216,90,0.2); color: #7a8a00; }
+.up-phase-badge-plan { background: rgba(63,109,246,0.12); color: var(--v5-cobalt); }
+.up-phase-badge-tele { background: rgba(136,168,132,0.18); color: var(--v5-sage); }
+
+/* ── Reference footer ── */
+.up-ref-section {
+  max-width: 1100px; margin: 48px auto 0;
+  padding: 0 32px 80px;
+}
+.up-ref-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--v5-dim);
+  margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--v5-ink);
+  display: flex; align-items: center; gap: 10px;
+}
+.up-ref-title::after { content: ''; flex: 1; height: 1px; background: var(--v5-line-2); }
+.up-ref-links {
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.up-ref-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.05em;
+  border: 1.5px solid var(--v5-ink);
+  padding: 8px 16px;
+  color: var(--v5-ink);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  box-shadow: 3px 3px 0 var(--v5-ink);
+}
+.up-ref-link:hover { background: var(--v5-ink); color: var(--v5-paper); }
+.up-ref-link span { opacity: 0.5; }
+</style>
+</head>
+<body data-page="updates">
+<div class="up-root">
+
+  <!-- ── Top bar ── -->
+  <header class="up-topbar">
+    <div class="up-topbar-brand">
+      <div>
+        nVision <span style="color:#88a884">·</span> AI
+        <span class="mono">VIBE CODE NEWS · TLV</span>
+      </div>
+    </div>
+    <a class="up-back-btn" href="index.html">&#8592; חזור לעמוד הבית</a>
+  </header>
+
+  <!-- ── Hero ── -->
+  <section class="up-hero">
+    <div class="up-hero-grid"></div>
+    <div class="up-hero-inner">
+      <div class="up-eyebrow">nVision AI · Newsroom Workbench · Variation E</div>
+      <h1>עדכונים <span class="serif">ותכנון</span></h1>
+      <p class="up-hero-sub">מה עובד היום · מה בתכנון · מה בבנייה</p>
+      <div style="display:flex;justify-content:center">
+        <div class="up-date-badge">
+          <span class="up-pulse"></span>
+          15 במאי 2026 · commit b7b2b9a
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Kanban board ── -->
+  <section class="up-kanban">
+
+    <!-- Column 1: Done -->
+    <div class="up-col up-col-done">
+      <div class="up-col-head">
+        <span class="up-col-dot" style="background:var(--v5-sage)"></span>
+        מה עובד
+        <span class="up-col-count">12</span>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Sanity schema — news</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">הגדרת טיפוס news ב-Sanity נפרדת מ-article. כולל שדות channels, urgency ומטא-נתונים.</p>
+        <code class="up-card-path">docs/SCHEMA-NEWS.md</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Pages Functions — news</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">שלוש פונקציות: save-news, list-news, delete-news. פרוסות על Cloudflare Pages.</p>
+        <code class="up-card-path">functions/api/</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">news.html — פיד היברידי</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">תצוגת timeline ⇄ grid. NewsCard עם 3 מצבי פתיחה: expand · popup · WhatsApp share.</p>
+        <code class="up-card-path">news.html</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Studio admin shell</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">5 עמודים: overview · articles · news · stats · channels. טופס חדשות מהיר מובנה.</p>
+        <code class="up-card-path">admin/</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Chat widget בעמוד הבית</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">סקינים: WhatsApp / Telegram / Messenger. מחובר ל-/api/list-news עם fallback לדמו.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Article wall בעמוד הבית</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">קיר מאמרים מחובר ל-/api/list-articles עם fallback לנתוני דמו.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Block editor — Notion style</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">11 סוגי בלוקים. autosave, slash menu, preview, localStorage sync, toast notifications.</p>
+        <code class="up-card-path">v5-editor.jsx</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">AI formatting — news</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">כפתור "סדר עם AI" בטופס החדשות המהיר. Groq llama-3.3-70b, provider-agnostic API.</p>
+        <code class="up-card-path">functions/api/ai-format.js</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Cloudflare env vars — AI</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">AI_PROVIDER, AI_MODEL, GROQ_API_KEY מוגדרים ב-production.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Telegram bot tokens בKV</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_CMD_BOT_TOKEN + שני Ralph bots — נמצאים ב-spark-secrets KV.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">GitHub Actions — deploy</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">Workflow לדפלוי אוטומטי ל-Cloudflare Pages בכל push ל-main.</p>
+        <code class="up-card-path">.github/workflows/</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">EDITOR_SETUP.md</div>
+          <span class="up-pill up-pill-done">✅ הושלם</span>
+        </div>
+        <p class="up-card-desc">הוראות wrangler dev + nodejs_compat flag. מעודכן לגרסה הנוכחית.</p>
+      </div>
+    </div>
+
+    <!-- Column 2: WIP -->
+    <div class="up-col up-col-wip">
+      <div class="up-col-head">
+        <span class="up-col-dot" style="background:var(--v5-mustard)"></span>
+        בעבודה
+        <span class="up-col-count">3</span>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">AI assist בעורך מאמרים</div>
+          <span class="up-pill up-pill-wip">⏳ Phase 2B</span>
+        </div>
+        <p class="up-card-desc">כפתור "סדר עם AI" בסרגל editor. שולח טקסט ל-/api/ai-format, מחזיר בלוקים heading2 + paragraphs.</p>
+        <code class="up-card-path">v5-editor.jsx</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">AI image generation block</div>
+          <span class="up-pill up-pill-wip">⏳ Phase 2B</span>
+        </div>
+        <p class="up-card-desc">בלוק תמונה שמקבל prompt ומחזיר תמונה. נכלל בהודעת commit אך עדיין לא ממומש במלואו.</p>
+      </div>
+
+      <div class="up-card" style="border-color:var(--v5-rose);box-shadow:4px 5px 0 var(--v5-rose)">
+        <div class="up-card-top">
+          <div class="up-card-title">הגדרת Sanity env vars</div>
+          <span class="up-pill" style="background:rgba(211,171,199,0.2);color:var(--v5-rose);border:1px solid var(--v5-rose)">⚠️ נדרש</span>
+        </div>
+        <p class="up-card-desc">SANITY_PROJECT_ID, SANITY_DATASET, SANITY_WRITE_TOKEN, SANITY_API_VERSION, EDITOR_SECRET — טרם הוגדרו ב-Cloudflare Pages.</p>
+      </div>
+    </div>
+
+    <!-- Column 3: Planned -->
+    <div class="up-col up-col-plan">
+      <div class="up-col-head">
+        <span class="up-col-dot" style="background:var(--v5-cobalt)"></span>
+        בתכנון
+        <span class="up-col-count">7</span>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">/api/research</div>
+          <span class="up-pill up-pill-planned">🗺️ Phase 3</span>
+        </div>
+        <p class="up-card-desc">חיפוש SERP / Brave / Grok-on-Twitter. abstraction אחד לכל provider.</p>
+        <code class="up-card-path">functions/api/research.js</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Multi-version generation</div>
+          <span class="up-pill up-pill-planned">🗺️ Phase 3</span>
+        </div>
+        <p class="up-card-desc">הרצת פרומפט מול 2–3 providers במקביל. המשתמש בוחר גרסה. UI: כרטיסיות A / B / C.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Telegram outbound</div>
+          <span class="up-pill up-pill-planned">🗺️ Telegram</span>
+        </div>
+        <p class="up-card-desc">בעת פרסום חדשות עם channels.includes('telegram') → POST ל-Bot API sendMessage.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Telegram inbound webhook</div>
+          <span class="up-pill up-pill-planned">🗺️ Telegram</span>
+        </div>
+        <p class="up-card-desc">Webhook מ-Telegram → יוצר draft חדשות ב-Sanity. מאפשר לפרסם ישירות מהערוץ.</p>
+        <code class="up-card-path">functions/api/telegram-webhook.js</code>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Historical retrieve</div>
+          <span class="up-pill up-pill-planned">🗺️ Telegram</span>
+        </div>
+        <p class="up-card-desc">סקריפט חד-פעמי שמייבא היסטוריית ערוץ Telegram ל-Sanity כ-imported drafts.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Inline formatting</div>
+          <span class="up-pill up-pill-planned">🗺️ Editor</span>
+        </div>
+        <p class="up-card-desc">Bold / Italic / Link בתוך בלוקי פסקה. contenteditable עם toolbar.</p>
+      </div>
+
+      <div class="up-card">
+        <div class="up-card-top">
+          <div class="up-card-title">Supabase migration (אופציה)</div>
+          <span class="up-pill up-pill-planned">🗺️ Backend</span>
+        </div>
+        <p class="up-card-desc">מפתחות Supabase קיימים ב-KV. הקוד הנוכחי Sanity-only — migration תידרש אם יוחלט לעבור.</p>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Warning banner ── -->
+  <div class="up-warn">
+    <div class="up-warn-box">
+      <div class="up-warn-title">⚠ הגדרה ידנית נדרשת — Cloudflare Pages</div>
+      <div class="up-warn-body">
+        המשתנים הבאים <strong>טרם הוגדרו</strong> ב-Cloudflare Pages env vars לפרויקט <code>vibe-code-news-ai</code>.
+        עד שיוגדרו, ה-editor וה-news endpoints לא יעבדו מקצה לקצה.<br><br>
+        <code>SANITY_PROJECT_ID</code> &nbsp;·&nbsp; <code>SANITY_DATASET</code> &nbsp;·&nbsp;
+        <code>SANITY_WRITE_TOKEN</code> &nbsp;·&nbsp; <code>SANITY_API_VERSION</code> &nbsp;·&nbsp; <code>EDITOR_SECRET</code><br><br>
+        הגדרה: Cloudflare Dashboard → Pages → <code>vibe-code-news-ai</code> → Settings → Environment variables.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Detailed planning sections ── -->
+  <section class="up-detail-section">
+    <h2><span class="serif">תכנון</span> מפורט</h2>
+
+    <details class="up-phase">
+      <summary>
+        <span class="up-phase-badge up-phase-badge-wip">⏳ Phase 2B</span>
+        AI assist בעורך מאמרים
+      </summary>
+      <div class="up-phase-body">
+        <p>הוספת "סדר עם AI" לblock editor — לוקח טקסט גולמי ומחזיר בלוקים מובנים.</p>
+        <ul>
+          <li><span class="up-item-icon">→</span> כפתור ✨ "סדר עם AI" בסרגל v5e-editor-bar-r ב-v5-editor.jsx</li>
+          <li><span class="up-item-icon">→</span> mode=article: שולח לapi/ai-format, response מפוצל לפי סעיפים → heading2 + paragraphs</li>
+          <li><span class="up-item-icon">→</span> בלוק AI image generation: prompt → תמונה (Pollinations בברירת מחדל)</li>
+          <li><span class="up-item-icon">→</span> תלות: functions/api/ai-format.js קיים ועובד (Phase 2A)</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="up-phase">
+      <summary>
+        <span class="up-phase-badge up-phase-badge-plan">🗺️ Phase 3</span>
+        Research + Multi-version generation
+      </summary>
+      <div class="up-phase-body">
+        <p><strong>3.1 /api/research</strong> — חיפוש חי ממקורות מרובים</p>
+        <ul>
+          <li><span class="up-item-icon">→</span> Brave Search API: חינמי עד 2K/חודש</li>
+          <li><span class="up-item-icon">→</span> Grok (X/Twitter): חיפוש ב-X בלבד</li>
+          <li><span class="up-item-icon">→</span> SERP: יידרש CloakBrowser/proxy</li>
+        </ul>
+        <p><strong>3.2 Multi-version</strong> — הרצה מקבילה מול 2–3 LLMs</p>
+        <ul>
+          <li><span class="up-item-icon">→</span> UI: כרטיסיות A / B / C עם תוצאות</li>
+          <li><span class="up-item-icon">→</span> הצבעה → הגרסה הנבחרת מוזרקת לeditor</li>
+          <li><span class="up-item-icon">→</span> Providers: Groq (נוכחי) · Claude · OpenAI</li>
+        </ul>
+        <p><strong>3.3 AI Image Generation</strong></p>
+        <ul>
+          <li><span class="up-item-icon">→</span> ברירת מחדל: Pollinations.ai — חינמי, ללא API key</li>
+          <li><span class="up-item-icon">→</span> אלטרנטיבה: Cloudflare Workers AI flux-1-schnell-fp8</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="up-phase">
+      <summary>
+        <span class="up-phase-badge up-phase-badge-tele">🗺️ Telegram</span>
+        Telegram bridge — track נפרד
+      </summary>
+      <div class="up-phase-body">
+        <p>שלושה כיוונים: שידור, קבלה, ייבוא היסטוריה.</p>
+        <ul>
+          <li><span class="up-item-icon">→</span> <strong>Outbound:</strong> publish עם channels.includes('telegram') → Bot API sendMessage לערוץ TELEGRAM_CHAT_ID</li>
+          <li><span class="up-item-icon">→</span> <strong>Inbound webhook:</strong> POST /api/telegram-webhook → draft חדשות ב-Sanity</li>
+          <li><span class="up-item-icon">→</span> <strong>Historical retrieve:</strong> Node.js script חד-פעמי, מייבא היסטוריית ערוץ ל-Sanity עם status="imported"</li>
+          <li><span class="up-item-icon">→</span> Bot tokens כבר קיימים ב-KV: TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID · TELEGRAM_CMD_BOT_TOKEN · Ralph bots ×2</li>
+        </ul>
+      </div>
+    </details>
+
+  </section>
+
+  <!-- ── Reference links ── -->
+  <section class="up-ref-section">
+    <div class="up-ref-title">מסמכי reference</div>
+    <div class="up-ref-links">
+      <a class="up-ref-link" href="../docs/STATUS-PROGRESS.md" target="_blank">
+        <span>📄</span> STATUS-PROGRESS.md
+      </a>
+      <a class="up-ref-link" href="../docs/ROADMAP.md" target="_blank">
+        <span>🗺️</span> ROADMAP.md
+      </a>
+      <a class="up-ref-link" href="../docs/SCHEMA-NEWS.md" target="_blank">
+        <span>🧩</span> SCHEMA-NEWS.md
+      </a>
+    </div>
+  </section>
+
+</div><!-- /.up-root -->
+</body>
+</html>

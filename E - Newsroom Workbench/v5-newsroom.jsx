@@ -144,6 +144,7 @@ const V5_LINKS = {
   tools: 'index.html#tools',
   community: 'index.html#community',
   editor: 'articles.html?tab=editor',
+  updates: 'updates.html',
 };
 
 const V5_NAV_ITEMS = [
@@ -152,6 +153,7 @@ const V5_NAV_ITEMS = [
   { key:'articles', label:'מאמרים', href:V5_LINKS.articles },
   { key:'article', label:'מאמר חדש', href:V5_LINKS.editor },
   { key:'tools', label:'כלים', href:V5_LINKS.tools },
+  { key:'updates', label:'עדכונים', href:V5_LINKS.updates },
   { key:'community', label:'קהילה', href:V5_LINKS.community },
 ];
 

@@ -95,6 +95,8 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
   const [autosaveAt, setAutosaveAt] = useState(null);
   const [publishing, setPublishing] = useState(false);
   const [secretDialogOpen, setSecretDialogOpen] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const isExisting = !!initialData?.slug;
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
@@ -182,6 +184,64 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
       return { ...v5eEmptyOfType(newType, { id: b.id, content: b.content }) };
     }));
   }, []);
+
+  // ---------- AI assist ----------
+  // Sends raw text to /api/ai-format (mode=article). Converts the structured
+  // response into Notion-style blocks (lead + heading2 + paragraphs per section).
+  // If the editor is empty (default single empty paragraph), replaces; otherwise
+  // appends so we don't clobber existing work.
+  const handleAiFormat = useCallback(async (rawText, instructions) => {
+    const secret = getEditorSecretLS();
+    if (!secret) {
+      v5eToast('הגדר Editor Secret קודם (⚙)', 'warn');
+      setSecretDialogOpen(true);
+      return false;
+    }
+    setAiBusy(true);
+    try {
+      const r = await fetch('/api/ai-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Editor-Secret': secret },
+        body: JSON.stringify({ rawText: rawText, mode: 'article', instructions: instructions || '' }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        const msg = (j && (j.error || j.message)) || ('HTTP ' + r.status);
+        v5eToast('AI נכשל: ' + msg, 'warn', 4200);
+        return false;
+      }
+      const data = j.data || {};
+      if (data.title && !title.trim()) setTitle(data.title);
+      if (data.slug && !slug.trim()) setSlug(data.slug);
+      const generated = [];
+      if (data.lead) {
+        generated.push(v5eEmptyOfType('lead', { content: data.lead }));
+      }
+      (Array.isArray(data.sections) ? data.sections : []).forEach((s) => {
+        if (s.heading) generated.push(v5eEmptyOfType('heading2', { content: s.heading }));
+        const paragraphs = (s.body || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+        paragraphs.forEach((p) => generated.push(v5eEmptyOfType('paragraph', { content: p })));
+      });
+      if (Array.isArray(data.takeaways) && data.takeaways.length) {
+        generated.push(v5eEmptyOfType('callout', { content: 'נקודות עיקריות: ' + data.takeaways.join(' · '), tone: 'sage' }));
+      }
+      if (!generated.length) {
+        v5eToast('AI לא החזיר תוכן בר-המרה', 'warn');
+        return false;
+      }
+      setBlocks((prev) => {
+        const isEffectivelyEmpty = prev.length === 1 && prev[0].type === 'paragraph' && !(prev[0].content || '').trim();
+        return isEffectivelyEmpty ? generated : prev.concat(generated);
+      });
+      v5eToast('סודר עם ' + (j.provider || 'AI') + ' — בדוק ועדכן', 'success');
+      return true;
+    } catch (e) {
+      v5eToast('שגיאת רשת: ' + e.message, 'warn');
+      return false;
+    } finally {
+      setAiBusy(false);
+    }
+  }, [title, slug]);
 
   // ---------- Save / publish ----------
   const handlePublish = async () => {
@@ -286,6 +346,9 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
         </div>
         <div className="v5e-editor-bar-r">
           <button className="v5e-btn ghost" onClick={() => setSecretDialogOpen(true)} title="Editor Secret">⚙</button>
+          <button className="v5e-btn ghost" onClick={() => setAiDialogOpen(true)} disabled={aiBusy} title="סדר טקסט גולמי לכתבה עם AI">
+            {aiBusy ? '⏳ AI…' : '✨ סדר עם AI'}
+          </button>
           <button className="v5e-btn ghost" onClick={() => setPreviewMode(true)}>תצוגה מקדימה</button>
           {isExisting && <button className="v5e-btn danger" onClick={handleDelete}>מחק</button>}
           <button className="v5e-btn ghost" onClick={onCancel}>ביטול</button>
@@ -294,6 +357,16 @@ function V5ArticleEditorV2({ initialData, onSaved, onCancel, onDeleted }) {
           </button>
         </div>
       </div>
+      {aiDialogOpen && (
+        <V5AiFormatDialog
+          busy={aiBusy}
+          onClose={() => setAiDialogOpen(false)}
+          onSubmit={async (rawText, instructions) => {
+            const ok = await handleAiFormat(rawText, instructions);
+            if (ok) setAiDialogOpen(false);
+          }}
+        />
+      )}
 
       <div className="v5e-editor-scroll">
         <div className="v5e-editor-canvas">
@@ -862,6 +935,54 @@ function V5SecretDialog({ onClose }) {
         <div className="v5e-dialog-actions">
           <button className="v5e-btn ghost" onClick={onClose}>ביטול</button>
           <button className="v5e-btn primary" onClick={() => { setEditorSecretLS(value.trim()); v5eToast('Editor Secret נשמר.', 'success'); onClose(); }}>שמור</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- AI format dialog ----------
+
+function V5AiFormatDialog({ onClose, onSubmit, busy }) {
+  const [rawText, setRawText] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const submit = () => {
+    const t = rawText.trim();
+    if (t.length < 20) { v5eToast('הזן לפחות 20 תווים', 'warn'); return; }
+    onSubmit(t, instructions.trim());
+  };
+  return (
+    <div className="v5e-dialog-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="v5e-dialog" style={{ maxWidth: 640 }}>
+        <h3>✨ סדר עם AI</h3>
+        <p>
+          הדבק טקסט גולמי (טיוטה, תמליל, הערות) — ה-AI יסדר אותו לכותרת + lead + סעיפים עם פסקאות.
+          הבלוקים החדשים יתווספו לעורך; אם הוא ריק, הם יחליפו את הפסקה הריקה. כותרת ו-slug מתמלאים אם הם ריקים.
+        </p>
+        <textarea
+          className="v5e-input"
+          rows={9}
+          value={rawText}
+          onChange={(e) => setRawText(e.target.value)}
+          placeholder="הדבק או הקלד טקסט גולמי כאן…"
+          dir="rtl"
+          style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.55 }}
+          disabled={busy}
+        />
+        <input
+          className="v5e-input"
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          placeholder="הנחיה אופציונלית לעורך AI (למשל: 'טון רשמי', 'התמקד בהשלכות עסקיות')"
+          dir="rtl"
+          style={{ marginTop: 8 }}
+          disabled={busy}
+        />
+        <div className="v5e-dialog-actions">
+          <button className="v5e-btn ghost" onClick={onClose} disabled={busy}>ביטול</button>
+          <button className="v5e-btn primary" onClick={submit} disabled={busy}>
+            {busy ? 'מבקש מ-AI…' : 'סדר וצור בלוקים'}
+          </button>
         </div>
       </div>
     </div>
