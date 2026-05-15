@@ -1,0 +1,171 @@
+# Vibe Code News AI — Handoff
+
+> מסמך אחד שמסכם איפה הפרויקט עומד, מה רץ אוטומטית, ומה דורש פעולה ידנית.
+> תאריך עדכון: 2026-05-16. ראה גם [STATUS-PROGRESS.md](STATUS-PROGRESS.md) ו-[ROADMAP.md](ROADMAP.md).
+
+---
+
+## TL;DR
+
+הפרויקט הוא AI Studio מעל Sanity לניהול **מאמרים** ארוכים ו**ידיעות** קצרות, עם פיד חי בעמוד הבית (chat widget) ופרסום רב-ערוצי מתוכנן (Telegram + WhatsApp).
+
+| מה | סטטוס |
+|---|---|
+| Phase 1 — פרסום (save / list / delete · feed · article wall · chat widget) | ✅ סגור |
+| Phase 2A — Groq AI מסדר טקסט לטופס ידיעות | ✅ סגור |
+| Phase 2B — Groq AI בעורך המאמרים (Notion-style) | ✅ סגור |
+| Phase 2C — Image generation (free → swap-able) | 🗺️ מתוכנן |
+| Phase 3 — Research (SERP/Brave/Grok-X) + multi-version | 🗺️ מתוכנן |
+| Telegram bridge — outbound / inbound / historical retrieve | 🗺️ מתוכנן |
+
+האתר חי ב-`new.nvision.me` (Pages project: `vibe-code-news-ai`). Deploy אוטומטי על push ל-main.
+
+---
+
+## מה כבר רץ אוטומטית (אין מה לעשות)
+
+### Cloudflare Pages env vars — production (מוגדרים דרך CF API)
+
+| משתנה | ערך | סוג |
+|---|---|---|
+| `AI_PROVIDER` | `groq` | plain_text |
+| `AI_MODEL` | `llama-3.3-70b-versatile` | plain_text |
+| `GROQ_API_KEY` | (מ-KV `GROQ_API_KEY_1`) | **secret_text** |
+| `SANITY_PROJECT_ID` | `edmzm8yr` | plain_text |
+| `SANITY_DATASET` | `production` | plain_text |
+| `SANITY_API_VERSION` | `2024-01-01` | plain_text |
+| `EDITOR_SECRET` | (random 32-byte hex) | **secret_text** |
+
+> הערך של `EDITOR_SECRET` מועבר במסר נפרד (לא ב-git). שמור אותו ב-localStorage של הדפדפן תחת המפתח `v5_editor_secret`.
+
+### תשתית קיימת (לא דורשת פעולה)
+
+- **GitHub Actions** → deploy אוטומטי לכל push ל-main (`.github/workflows/deploy.yml`).
+- **Cloudflare Pages** → השרת מסביב לסטטיים + `functions/api/*.js` כ-Pages Functions.
+- **GROQ_API_KEY** הוטען מ-KV `spark-secrets/GROQ_API_KEY_1` ונשמר כ-secret_text ב-Pages env. מעולם לא יעלה ל-git.
+
+---
+
+## מה דורש פעולה ידנית ממך (3 דברים)
+
+### 1. SANITY_WRITE_TOKEN (5 דק׳)
+
+הטוקן ב-`.env.local` שלך **פג תוקף** (אומת מול Sanity API → 401).
+
+```
+1. גש ל-https://www.sanity.io/manage/project/edmzm8yr
+2. Settings → API → Tokens → Add API token
+   - Name:        "Vibe Code News AI · Editor"
+   - Permissions: Editor
+3. העתק את הטוקן (מוצג פעם אחת בלבד).
+4. ב-Cloudflare: dashboard.cloudflare.com → Pages → vibe-code-news-ai →
+   Settings → Environment variables → Production →
+   Add variable: SANITY_WRITE_TOKEN = <הטוקן> · Type: Encrypt
+5. Save → Redeploy מ-Deployments.
+```
+
+עד שזה ייעשה: `/api/save-article`, `/api/save-news`, `/api/delete-*` יחזירו `sanity_error` (401). הקריאות הציבוריות (`list-articles`, `list-news`) ימשיכו לעבוד אם ה-dataset ציבורי, אחרת ידרשו `SANITY_READ_TOKEN` (אופציונלי).
+
+### 2. הוסף `news` document type ל-Sanity Studio שלך (10 דק׳)
+
+ה-schema המלא ב-[SCHEMA-NEWS.md](SCHEMA-NEWS.md). אם ה-Studio שלך הוא:
+- **Hosted (sanity.io/manage)** → Schema → Add document type → הדבק את ההגדרה.
+- **Self-hosted (קוד נפרד)** → צור `schemas/documents/news.ts` עם התוכן, רשום ב-`schemas/index.ts`, ו-`sanity deploy`.
+
+לאחר זה, יצירת ידיעה מ-`/E - Newsroom Workbench/admin/news.html` → "+ ידיעה מהירה" תייצר מסמך אמיתי, והוא יופיע בפיד `/news.html` ובכרטיסי ה-chat widget בעמוד הבית.
+
+### 3. הגדר `v5_editor_secret` בדפדפן (פעם אחת לדפדפן, 30 שניות)
+
+```
+1. פתח את אחד מהדפים האלה: /E - Newsroom Workbench/article.html?action=new
+2. לחץ על ⚙ בסרגל העליון.
+3. הדבק את ה-EDITOR_SECRET שקיבלת בנפרד.
+4. שמור.
+```
+
+נשמר ב-localStorage. נדרש גם לפעולות AI (כפתור ✨ "סדר עם AI") וגם לשמירה/מחיקה.
+
+---
+
+## אדריכלות בשורות
+
+```
+דפדפן
+   ├─ static HTML/JSX/CSS (Cloudflare Pages CDN)
+   ├─ React 18 + Babel-standalone (אין build step)
+   └─ POST /api/{save,list,delete,ai-format}-* (X-Editor-Secret)
+                                    │
+                                    ▼
+                      Cloudflare Pages Function
+                      (functions/api/*.js)
+                                    │
+              ┌─────────────────────┼─────────────────────┐
+              ▼                     ▼                     ▼
+        Sanity Content API    Groq Cloud API       (Phase 3+:
+        (write/read by slug)  (LLM JSON)            Telegram Bot,
+                                                    SERP, Brave, ...)
+```
+
+**עיקרון מפתח:** ה-write tokens של Sanity ו-API keys של AI **לא מגיעים לקוד הקליינט**. הקליינט נושא רק `EDITOR_SECRET` כקוד-מעבר; ה-Pages Function בודקת אותו ומבצעת את הקריאה האמיתית עם הסודות שלה.
+
+---
+
+## איך לבדוק שהכל עובד (smoke test, 5 דק׳ אחרי שהשלמת את שלושת השלבים מלמעלה)
+
+```powershell
+# מקומית — Pages Functions עם הדגלים הדרושים
+npx wrangler pages dev . --port 8788 `
+  --compatibility-date 2025-01-01 `
+  --compatibility-flags=nodejs_compat
+```
+
+ואז בדפדפן:
+
+| בדיקה | ציפייה |
+|---|---|
+| `http://localhost:8788/E - Newsroom Workbench/news.html` | פיד דמו (5 כרטיסים). אם הוספת ידיעה ב-Sanity, היא תופיע. |
+| `http://localhost:8788/E - Newsroom Workbench/admin/news.html` | טבלת ידיעות + "+ ידיעה מהירה". |
+| "+ ידיעה מהירה" → "✨ סדר עם AI" | הטופס מתמלא ב-headline/dek/body/category/urgency מ-Groq. |
+| "שמור ופרסם" | מחזיר 200, הידיעה צצה ב-`/news.html` ובכרטיס ה-chat בעמוד הבית. |
+| `http://localhost:8788/E - Newsroom Workbench/article.html?action=new` → "✨ סדר עם AI" | דיאלוג נפתח, הדבק טקסט, ה-blocks מתווספים לעורך. |
+
+אם משהו לא עובד, פתח DevTools → Network → בדוק את ה-response של `/api/*`. שגיאות נפוצות:
+- `editor_secret_not_set` → לא הגדרת `EDITOR_SECRET` ב-Pages env.
+- `unauthorized` → ה-`X-Editor-Secret` של הדפדפן לא תואם את ה-Pages env.
+- `sanity_not_configured` → חסר `SANITY_PROJECT_ID` או `SANITY_WRITE_TOKEN`.
+- `sanity_error` 401 → טוקן Sanity פג תוקף או חסר Editor role.
+- `llm_error` → `GROQ_API_KEY` לא מוגדר / מכסת חינם הסתיימה. שלוף `GROQ_API_KEY_2` או `GROQ_API_KEY_3` מ-KV.
+
+---
+
+## מסמכי reference פנימיים
+
+| מסמך | מה יש שם |
+|---|---|
+| [STATUS-PROGRESS.md](STATUS-PROGRESS.md) | סטטוס מפורט phase by phase, gotchas, וגילויים |
+| [ROADMAP.md](ROADMAP.md) | Phase 2C, Phase 3, Telegram bridge — תכנון מפורט |
+| [SCHEMA-NEWS.md](SCHEMA-NEWS.md) | ה-schema של news ל-Sanity (להדבקה ידנית) |
+| [EDITOR_SETUP.md](../E%20-%20Newsroom%20Workbench/EDITOR_SETUP.md) | הוראות התקנה ראשונית של העורך + wrangler dev |
+| `/E - Newsroom Workbench/updates.html` | אותה מידע אבל כעמוד באתר עצמו (Kanban + collapsibles) |
+
+---
+
+## ארגז כלים ב-KV (`spark-secrets`, ns `215100443225476ab32bea1e6411ac69`)
+
+מפתחות זמינים לפיתוח עתידי — שלוף עם `get_kv NS KEY`:
+
+| מפתח | למה זה טוב |
+|---|---|
+| `GROQ_API_KEY_2`, `GROQ_API_KEY_3` | fallback אם הראשון מסיים מכסה |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | להוסיף provider חלופי ל-`ai-format.js` |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Phase Telegram outbound |
+| `TELEGRAM_CMD_BOT_TOKEN` | Phase Telegram inbound (webhook) |
+| `VIBE_NEWS_SUPABASE_*` | אופציה לעבור ל-Supabase במקום Sanity (יחייב מיגרציית קוד) |
+
+⚠️ **אין** `SANITY_*` או `EDITOR_*` ב-KV. הראשון דורש regeneration ידני (סעיף 1 למעלה), השני נוצר אוטומטית ב-Pages env.
+
+---
+
+## אחרי שתשלים את 3 הצעדים
+
+הפרויקט מוכן לפיתוח Phase 2C / 3 / Telegram. ראה `ROADMAP.md` לפירוט המשימה הבאה.
