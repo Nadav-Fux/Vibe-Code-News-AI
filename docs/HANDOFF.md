@@ -7,16 +7,19 @@
 
 ## TL;DR
 
-הפרויקט הוא AI Studio מעל Sanity לניהול **מאמרים** ארוכים ו**ידיעות** קצרות, עם פיד חי בעמוד הבית (chat widget) ופרסום רב-ערוצי מתוכנן (Telegram + WhatsApp).
+הפרויקט הוא AI Studio מעל Sanity לניהול **מאמרים** ארוכים ו**ידיעות** קצרות, עם פיד חי בעמוד הבית (chat widget) ופרסום רב-ערוצי (Telegram, WhatsApp בעתיד).
 
 | מה | סטטוס |
 |---|---|
 | Phase 1 — פרסום (save / list / delete · feed · article wall · chat widget) | ✅ סגור |
 | Phase 2A — Groq AI מסדר טקסט לטופס ידיעות | ✅ סגור |
 | Phase 2B — Groq AI בעורך המאמרים (Notion-style) | ✅ סגור |
-| Phase 2C — Image generation (free → swap-able) | 🗺️ מתוכנן |
-| Phase 3 — Research (SERP/Brave/Grok-X) + multi-version | 🗺️ מתוכנן |
-| Telegram bridge — outbound / inbound / historical retrieve | 🗺️ מתוכנן |
+| Phase 2C — Image generation (Pollinations חינמי, provider-agnostic) | ✅ סגור |
+| Phase 3-A — Research (Brave Search + Groq synthesis) ב-`+ ידיעה מהירה` | ✅ סגור |
+| Phase Telegram-A — outbound (פרסום אוטומטי לערוץ) | ✅ סגור |
+| Phase Telegram-B — inbound webhook (פוסט בערוץ → news draft) | ✅ סגור |
+| Phase 3-B — multi-version generation (2-3 ספקים, העורך בוחר) | 🗺️ מתוכנן |
+| Phase Telegram-C — historical retrieve (sync היסטוריה אחת) | 🗺️ מתוכנן |
 
 האתר חי ב-`new.nvision.me` (Pages project: `vibe-code-news-ai`). Deploy אוטומטי על push ל-main.
 
@@ -35,8 +38,14 @@
 | `SANITY_DATASET` | `production` | plain_text |
 | `SANITY_API_VERSION` | `2024-01-01` | plain_text |
 | `EDITOR_SECRET` | (random 32-byte hex) | **secret_text** |
+| `IMAGE_PROVIDER` | `pollinations` | plain_text |
+| `RESEARCH_PROVIDER` | `brave` | plain_text |
+| `BRAVE_SEARCH_API_KEY` | (מ-KV `BRAVE_SEARCH_API_KEY`) | **secret_text** |
+| `TELEGRAM_BOT_TOKEN` | (מ-KV `TELEGRAM_BOT_TOKEN`) | **secret_text** |
+| `TELEGRAM_CHAT_ID` | `7694920368` (מ-KV) | plain_text |
+| `TELEGRAM_WEBHOOK_SECRET` | (random 24-byte hex) | **secret_text** |
 
-> הערך של `EDITOR_SECRET` מועבר במסר נפרד (לא ב-git). שמור אותו ב-localStorage של הדפדפן תחת המפתח `v5_editor_secret`.
+> הערכים של `EDITOR_SECRET` ו-`TELEGRAM_WEBHOOK_SECRET` מועברים במסרים נפרדים. שמור את ה-EDITOR_SECRET ב-localStorage של הדפדפן (מפתח `v5_editor_secret`).
 
 ### תשתית קיימת (לא דורשת פעולה)
 
@@ -81,7 +90,25 @@ pnpm sanity deploy         # מעלה ל-<hostname>.sanity.studio (בחר hostna
 
 ראה [studio/README.md](../studio/README.md) להוראות מפורטות.
 
-### 3. הגדר `v5_editor_secret` בדפדפן (פעם אחת לדפדפן, 30 שניות)
+### 3. רישום webhook ל-Telegram (פעם אחת, אחרי deploy ראשון, 1 דק׳)
+
+ה-endpoint `https://new.nvision.me/api/telegram-webhook` כבר חי, וקיים `TELEGRAM_WEBHOOK_SECRET` ב-env. נשאר לומר ל-Telegram לשלוח לשם את האירועים:
+
+```bash
+# החלף את <SECRET> בערך של TELEGRAM_WEBHOOK_SECRET (מועבר במסר נפרד)
+# וב-<BOT_TOKEN> את TELEGRAM_BOT_TOKEN (כבר ידוע לך)
+curl -sS -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://new.nvision.me/api/telegram-webhook",
+    "secret_token": "<SECRET>",
+    "allowed_updates": ["channel_post", "edited_channel_post", "message", "edited_message"]
+  }'
+```
+
+מעכשיו, כל פוסט בערוץ ה-Telegram יווצר אוטומטית כ-news draft ב-Sanity (ניתן לעריכה ופרסום מ-`/admin/news.html`).
+
+### 4. הגדר `v5_editor_secret` בדפדפן (פעם אחת לדפדפן, 30 שניות)
 
 ```
 1. פתח את אחד מהדפים האלה: /E - Newsroom Workbench/article.html?action=new
@@ -162,13 +189,15 @@ npx wrangler pages dev . --port 8788 `
 
 מפתחות זמינים לפיתוח עתידי — שלוף עם `get_kv NS KEY`:
 
-| מפתח | למה זה טוב |
-|---|---|
-| `GROQ_API_KEY_2`, `GROQ_API_KEY_3` | fallback אם הראשון מסיים מכסה |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | להוסיף provider חלופי ל-`ai-format.js` |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Phase Telegram outbound |
-| `TELEGRAM_CMD_BOT_TOKEN` | Phase Telegram inbound (webhook) |
-| `VIBE_NEWS_SUPABASE_*` | אופציה לעבור ל-Supabase במקום Sanity (יחייב מיגרציית קוד) |
+| מפתח | למה זה טוב | סטטוס |
+|---|---|---|
+| `GROQ_API_KEY_2`, `GROQ_API_KEY_3` | fallback אם הראשון מסיים מכסה | זמין |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | provider חלופי ל-`ai-format.js` (Phase 3-B multi-version) | זמין |
+| `BRAVE_ANSWERS_API_KEY` | Brave Answers — Q&A במקום SERP | זמין |
+| `SERPAPI_API_KEY`, `TAVILY_API_KEY` | providers חלופיים ל-`research.js` | זמין |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | ✅ כבר בשימוש (outbound + inbound) | wired |
+| `TELEGRAM_CMD_BOT_TOKEN`, ralph בוטים | בוטים נוספים — לפיצול אם נדרש | זמין |
+| `VIBE_NEWS_SUPABASE_*` | אופציה לעבור ל-Supabase במקום Sanity | זמין |
 
 ⚠️ **אין** `SANITY_*` או `EDITOR_*` ב-KV. הראשון דורש regeneration ידני (סעיף 1 למעלה), השני נוצר אוטומטית ב-Pages env.
 

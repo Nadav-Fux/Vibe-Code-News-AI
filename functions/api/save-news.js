@@ -119,5 +119,21 @@ export async function onRequestPost(context) {
     return jsonResponse(sanityRes.status, { error: 'sanity_error', detail: sanityJson });
   }
 
-  return jsonResponse(200, { ok: true, action: existing ? 'updated' : 'created', sanity: sanityJson });
+  // Fan-out to Telegram if this news item targets the channel.
+  // Non-blocking: the news is already saved to Sanity; Telegram errors are
+  // reported in the response payload but do not fail the save.
+  let telegramResult = null;
+  if (Array.isArray(channelList) && channelList.includes('telegram') && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    try {
+      const { publishToTelegram } = await import('./publish-telegram.js');
+      // Flatten slug for the helper (doc.slug is a Sanity slug object)
+      const telegramDoc = { ...doc, slug: doc.slug?.current ?? slug };
+      const r = await publishToTelegram(telegramDoc, env);
+      telegramResult = { ok: true, messageId: r.messageId };
+    } catch (e) {
+      telegramResult = { ok: false, error: String(e.message || e) };
+    }
+  }
+
+  return jsonResponse(200, { ok: true, action: existing ? 'updated' : 'created', sanity: sanityJson, telegram: telegramResult });
 }

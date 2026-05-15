@@ -296,6 +296,8 @@
   padding-top: 4px;
 }
 .v5e-img-block { display: flex; flex-direction: column; gap: 6px; }
+.v5e-img-url-row { display: flex; gap: 8px; align-items: center; }
+.v5e-img-url-row > input { flex: 1; min-width: 0; }
 .v5e-img-preview {
   margin: 4px 0;
   border-radius: 8px;

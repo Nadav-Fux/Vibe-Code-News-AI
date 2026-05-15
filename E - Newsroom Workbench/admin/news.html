@@ -50,10 +50,14 @@
           <label style="display:grid;gap:4px">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span style="font-size:11px;letter-spacing:0.1em;color:var(--admin-dim);text-transform:uppercase">גוף הידיעה (1-3 פסקאות) *</span>
-              <button type="button" id="ai-format-btn" class="admin-btn" style="font-size:11.5px;padding:4px 10px">✨ סדר עם AI</button>
+              <div style="display:flex;gap:6px">
+                <button type="button" id="research-btn" class="admin-btn" style="font-size:11.5px;padding:4px 10px">🔎 מצא מקורות</button>
+                <button type="button" id="ai-format-btn" class="admin-btn" style="font-size:11.5px;padding:4px 10px">✨ סדר עם AI</button>
+              </div>
             </div>
             <textarea name="body" required maxlength="2400" rows="6" style="padding:8px 10px;border:1px solid var(--admin-line-2);font-family:inherit;font-size:14px;background:var(--admin-bg);resize:vertical"></textarea>
             <span id="ai-format-status" style="font-size:11.5px;color:var(--admin-dim);min-height:14px"></span>
+            <div id="research-sources-list" style="display:none;margin-top:6px;padding:8px 10px;border:1px solid var(--admin-line-2);border-radius:4px;font-size:11.5px;line-height:1.7"></div>
           </label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <label style="display:grid;gap:4px">
@@ -149,6 +153,68 @@
       form.style.display = form.style.display === 'none' ? 'block' : 'none';
     });
 
+    document.getElementById('research-btn').addEventListener('click', async function () {
+      var statusEl = document.getElementById('ai-format-status');
+      var sourcesListEl = document.getElementById('research-sources-list');
+      var formEl = document.getElementById('quick-news');
+      var researchBtn = document.getElementById('research-btn');
+
+      var topic = (formEl.elements['headline'] && formEl.elements['headline'].value.trim()) || '';
+      if (!topic) {
+        topic = (window.prompt('הקלד נושא לחיפוש:') || '').trim();
+      }
+      if (topic.length < 5) {
+        statusEl.textContent = '⚠ הנושא קצר מדי — הקלד לפחות 5 תווים.';
+        return;
+      }
+
+      var secret = AdminShell.getSecret();
+      if (!secret) {
+        var supplied = window.prompt('הזן EDITOR_SECRET (פעם אחת, נשמר ב-localStorage):');
+        if (!AdminShell.setSecret(supplied)) { statusEl.textContent = 'בוטל.'; return; }
+        secret = AdminShell.getSecret();
+      }
+
+      researchBtn.textContent = '⏳ מחפש...';
+      researchBtn.disabled = true;
+      sourcesListEl.style.display = 'none';
+      statusEl.textContent = '⏳ מחפש ב-Brave + מסכם עם Groq...';
+
+      try {
+        var res = await fetch('/api/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Editor-Secret': secret },
+          body: JSON.stringify({ topic: topic, mode: 'news', maxResults: 5 }),
+        });
+        var j = await res.json().catch(function () { return {}; });
+        if (!res.ok || !j.ok) throw new Error((j && (j.error || j.message)) || res.status);
+        var d = j.data || {};
+        if (d.headline)  formEl.elements['headline'].value  = d.headline;
+        if (d.slug)      formEl.elements['slug'].value      = d.slug;
+        if (d.dek)       formEl.elements['dek'].value       = d.dek;
+        if (d.body)      formEl.elements['body'].value      = d.body;
+        if (d.category)  formEl.elements['category'].value  = d.category;
+        if (d.urgency)   formEl.elements['urgency'].value   = d.urgency;
+        // Store source attribution for the submit payload
+        window._newsResearchSource    = d.source    || '';
+        window._newsResearchSourceUrl = d.sourceUrl || '';
+        statusEl.textContent = '✓ נמצאו ' + (j.sourcesFound || 0) + ' מקורות — בדוק לפני שמירה.';
+        // Render source list
+        if (j.sources && j.sources.length) {
+          var items = j.sources.map(function (s) {
+            return '<div style="margin-bottom:4px">• <a href="' + AdminShell.escapeHtml(s.url) + '" target="_blank" rel="noopener" style="color:var(--admin-accent)">' + AdminShell.escapeHtml(s.title || s.url) + '</a></div>';
+          }).join('');
+          sourcesListEl.innerHTML = '<strong style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--admin-dim)">מקורות שנמצאו:</strong><div style="margin-top:4px">' + items + '</div>';
+          sourcesListEl.style.display = 'block';
+        }
+      } catch (err) {
+        statusEl.textContent = '⚠ ' + err.message;
+      } finally {
+        researchBtn.textContent = '🔎 מצא מקורות';
+        researchBtn.disabled = false;
+      }
+    });
+
     document.getElementById('ai-format-btn').addEventListener('click', async function () {
       var statusEl = document.getElementById('ai-format-status');
       var formEl = document.getElementById('quick-news');
@@ -207,6 +273,8 @@
         category: fd.get('category'),
         urgency: fd.get('urgency'),
         channels: channels,
+        source: window._newsResearchSource || undefined,
+        sourceUrl: window._newsResearchSourceUrl || undefined,
       };
       var statusEl = document.getElementById('quick-news-status');
       statusEl.textContent = 'שומר...';

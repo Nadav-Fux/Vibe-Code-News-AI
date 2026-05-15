@@ -787,6 +787,30 @@ function V5ImageBlock({ block, onUpdate }) {
   const [ratio, setRatio] = useState(block.ratio || 'wide');
   const [generating, setGenerating] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const generateViaApi = async () => {
+    const desc = window.prompt('תאר את התמונה (10-500 תווים):');
+    if (!desc || !desc.trim()) return;
+    const secret = getEditorSecretLS();
+    if (!secret) { v5eToast('חסר מפתח עורך — פתח הגדרות', 'warn'); return; }
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Editor-Secret': secret },
+        body: JSON.stringify({ prompt: desc.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { v5eToast('שגיאה: ' + (data.message || data.error || res.status), 'error'); return; }
+      onUpdate({ content: data.url, alt: block.alt || desc.trim().slice(0, 80) });
+      v5eToast('תמונה נוצרה', 'success');
+    } catch (e) {
+      v5eToast('שגיאת רשת: ' + e.message, 'error');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const generate = () => {
     if (!prompt.trim()) { v5eToast('הכנס פרומפט לתמונה', 'warn'); return; }
@@ -831,15 +855,23 @@ function V5ImageBlock({ block, onUpdate }) {
           </div>
         </div>
       ) : (
-        <input
-          type="url"
-          className="v5e-input v5e-input-image-url"
-          value={block.content}
-          onChange={(e) => onUpdate({ content: e.target.value })}
-          placeholder="הדבק URL של תמונה (https://…)"
-          dir="ltr"
-          spellCheck={false}
-        />
+        <div className="v5e-img-url-row">
+          <input
+            type="url"
+            className="v5e-input v5e-input-image-url"
+            value={block.content}
+            onChange={(e) => onUpdate({ content: e.target.value })}
+            placeholder="הדבק URL של תמונה (https://…)"
+            dir="ltr"
+            spellCheck={false}
+          />
+          <button
+            className="v5e-btn v5e-img-ai-btn"
+            onClick={generateViaApi}
+            disabled={aiLoading}
+            title="צור תמונה עם AI לפי תיאור"
+          >{aiLoading ? '⏳ יוצר...' : '✨ צור עם AI'}</button>
+        </div>
       )}
 
       {block.content && (
