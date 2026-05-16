@@ -144,17 +144,14 @@ const V5_LINKS = {
   tools: 'index.html#tools',
   community: 'index.html#community',
   editor: 'articles.html?tab=editor',
-  updates: 'updates.html',
+  updates: 'project-status.html',
 };
 
 const V5_NAV_ITEMS = [
   { key:'home', label:'בית', href:V5_LINKS.home },
   { key:'news', label:'חדשות', href:V5_LINKS.news },
   { key:'articles', label:'מאמרים', href:V5_LINKS.articles },
-  { key:'article', label:'מאמר חדש', href:V5_LINKS.editor },
-  { key:'tools', label:'כלים', href:V5_LINKS.tools },
   { key:'updates', label:'עדכונים', href:V5_LINKS.updates },
-  { key:'community', label:'קהילה', href:V5_LINKS.community },
 ];
 
 // ===== Drag hook =====
@@ -507,15 +504,23 @@ function V5Nav({ activeKey }) {
   return React.createElement('header', { className: 'v5-nav' },
     React.createElement('div', { className: 'v5-nav-l' },
       React.createElement('a', { className: 'v5-mark', href: V5_LINKS.home },
-        React.createElement('svg', { viewBox: '0 0 60 60' },
-          React.createElement('rect', { x: 0, y: 0, width: 60, height: 60, rx: 14, fill: '#11110d' }),
-          React.createElement('path', { d: 'M14 18 Q14 12 20 12 L40 12 Q46 12 46 18 L46 36 Q46 42 40 42 L26 42 L18 50 L20 42 Q14 42 14 36 Z', fill: '#88a884' }),
-          React.createElement('text', { x: 30, y: 32, textAnchor: 'middle', fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 700, fill: '#11110d' }, 'n.')
+        React.createElement('svg', { viewBox: '0 0 48 48', width: 48, height: 48 },
+          React.createElement('style', null,
+            '@keyframes nv-spin{from{transform-origin:24px 24px;transform:rotate(0deg)}to{transform-origin:24px 24px;transform:rotate(360deg)}}' +
+            '@keyframes nv-pulse{0%,100%{opacity:0.55}50%{opacity:1}}' +
+            '.nv-ring{animation:nv-spin 14s linear infinite}' +
+            '.nv-dot{animation:nv-pulse 3s ease-in-out infinite}'
+          ),
+          React.createElement('rect', { x: 0, y: 0, width: 48, height: 48, rx: 11, fill: '#11110d' }),
+          React.createElement('circle', { className: 'nv-ring', cx: 24, cy: 24, r: 19, fill: 'none', stroke: '#88a884', strokeWidth: 1, strokeDasharray: '4 5' }),
+          React.createElement('path', { d: 'M13 14 L13 30 L18 30 L18 20 L24 30 L29 30 L29 14 L24 14 L24 24 L18 14 Z', fill: '#f4f0e8' }),
+          React.createElement('path', { d: 'M31 14 L31 30 L36 30 L36 14 Z', fill: '#88a884', opacity: 0.9 }),
+          React.createElement('circle', { className: 'nv-dot', cx: 33.5, cy: 34.5, r: 2.2, fill: '#88a884' })
         )
       ),
       React.createElement('div', { className: 'v5-name' },
-        React.createElement('strong', null, 'nVision ', React.createElement('span', { style: { color: '#88a884' } }, '·'), ' AI'),
-        React.createElement('span', { className: 'mono' }, 'VIBE CODE NEWS · TLV')
+        React.createElement('strong', null, 'nVision ', React.createElement('span', { style: { color: '#88a884' } }, '·'), ' Digital'),
+        React.createElement('span', { className: 'mono' }, 'EDITORIAL · AI · TLV')
       )
     ),
     React.createElement('nav', { className: 'v5-nav-c' },
@@ -531,8 +536,7 @@ function V5Nav({ activeKey }) {
       React.createElement('div', { className: 'v5-nav-clock' },
         React.createElement('span', { className: 'v5-pulse' }),
         React.createElement('span', null, 'LIVE · ' + time)
-      ),
-      React.createElement('a', { className: 'v5-join-btn', href: V5_LINKS.community }, 'הצטרף לערוץ ', React.createElement('span', null, '↗'))
+      )
     )
   );
 }
@@ -648,7 +652,7 @@ function V5ChatHeader(_ref2) {
     React.createElement('span', { className: 'v5-chat-back' }, '‹'),
     React.createElement('div', { className: 'v5-chat-av', style: { background: '#25D366' } }, 'n.'),
     React.createElement('div', { className: 'v5-chat-h-meta' },
-      React.createElement('strong', null, 'nVision · AI'),
+      React.createElement('strong', null, 'nVision Digital'),
       React.createElement('span', null, typing ? 'כותב/ת…' : 'ערוץ · 12,847 עוקבים')
     ),
     React.createElement('div', { className: 'v5-chat-icons' },
@@ -661,7 +665,7 @@ function V5ChatHeader(_ref2) {
     React.createElement('span', { className: 'v5-chat-back' }, '‹'),
     React.createElement('div', { className: 'v5-chat-av', style: { background: 'linear-gradient(135deg,#54a9eb,#2A8AD8)' } }, 'n.'),
     React.createElement('div', { className: 'v5-chat-h-meta' },
-      React.createElement('strong', null, 'nVision · AI ', React.createElement('span', { className: 'v5-tg-verified' }, '✓')),
+      React.createElement('strong', null, 'nVision Digital ', React.createElement('span', { className: 'v5-tg-verified' }, '✓')),
       React.createElement('span', null, typing ? 'כותב/ת…' : '12,847 subscribers')
     ),
     React.createElement('div', { className: 'v5-chat-icons' },
@@ -673,7 +677,7 @@ function V5ChatHeader(_ref2) {
     React.createElement('span', { className: 'v5-chat-back' }, '‹'),
     React.createElement('div', { className: 'v5-chat-av', style: { background: 'linear-gradient(135deg,#0099FF,#A033FF)' } }, 'n.'),
     React.createElement('div', { className: 'v5-chat-h-meta' },
-      React.createElement('strong', null, 'nVision · AI'),
+      React.createElement('strong', null, 'nVision Digital'),
       React.createElement('span', null, typing ? 'מקליד/ה…' : 'פעיל/ה עכשיו')
     ),
     React.createElement('div', { className: 'v5-chat-icons' },
@@ -1926,13 +1930,13 @@ function mountVariationFive() {
   var page = document.body.dataset.page || 'home';
   if (page === 'article') {
     var isDemo = new URLSearchParams(window.location.search).get('view') === 'demo';
-    document.title = isDemo ? 'nVision AI · Demo Article · Variation E' : 'nVision AI · New Article Template · Variation E';
+    document.title = isDemo ? 'nVision Digital · Demo Article' : 'nVision Digital · New Article Template';
   }
   if (page === 'articles') {
-    document.title = 'nVision AI · Articles · Variation E';
+    document.title = 'nVision Digital · Articles';
   }
   if (page === 'news') {
-    document.title = 'nVision AI · News · Variation E';
+    document.title = 'nVision Digital · News';
   }
   ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(V5App, { page: page }));
 }

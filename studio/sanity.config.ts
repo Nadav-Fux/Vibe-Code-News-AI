@@ -9,6 +9,9 @@ export default defineConfig({
   title: 'Vibe Code News · Studio',
   projectId: 'edmzm8yr',
   dataset: 'production',
+  // Studio hostname for `sanity deploy` — avoids interactive prompt.
+  // If "vibe-code-news" is already taken globally on sanity.studio, change here.
+  studioHost: 'vibe-code-news',
   plugins: [
     structureTool({
       structure: (S) =>

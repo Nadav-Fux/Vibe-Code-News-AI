@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>nVision AI · Project Status · Variation E</title>
+<title>nVision Digital · Project Status</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -244,6 +244,72 @@
 .ps-rm-item-body { flex: 1; min-width: 0; }
 .ps-rm-item-title { font-size: 13.5px; font-weight: 700; margin-bottom: 2px; }
 .ps-rm-item-desc { font-size: 12px; color: var(--v5-dim); line-height: 1.5; }
+/* ---- Commands table ---- */
+.ps-cmd-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.ps-cmd-table th {
+  text-align: right; font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+  color: var(--v5-dim); padding: 8px 12px;
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.ps-cmd-table td {
+  padding: 10px 12px; font-size: 12.5px;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  vertical-align: top;
+}
+.ps-cmd-table td .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.04em;
+}
+/* ---- Warning callout ---- */
+.ps-warn {
+  border: 2px solid var(--v5-rose);
+  background: rgba(211,171,199,0.12);
+  padding: 14px 18px; margin-bottom: 24px;
+  font-size: 13px; line-height: 1.6;
+}
+.ps-warn .ps-warn-head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--v5-rose); margin-bottom: 6px;
+}
+/* ---- Two-col lookup ---- */
+.ps-lookup { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.ps-lookup th {
+  text-align: right; font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+  color: var(--v5-dim); padding: 8px 12px;
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.ps-lookup td {
+  padding: 9px 12px; font-size: 12.5px;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  vertical-align: top;
+}
+.ps-lookup td:first-child { width: 38%; }
+/* ---- Env-var table ---- */
+.ps-env-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.ps-env-table th {
+  text-align: right; font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+  color: var(--v5-dim); padding: 8px 12px;
+  border-bottom: 1.5px solid var(--v5-ink);
+}
+.ps-env-table td {
+  padding: 8px 12px; font-size: 12px;
+  border-bottom: 1px solid var(--v5-line, rgba(17,17,13,0.10));
+  vertical-align: top;
+}
+.ps-env-secret {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  padding: 1px 6px; letter-spacing: 0.06em;
+  background: rgba(211,171,199,0.18); color: var(--v5-rose);
+}
+.ps-env-plain {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  padding: 1px 6px; letter-spacing: 0.06em;
+  background: rgba(136,168,132,0.18); color: var(--v5-sage);
+}
 /* ---- Keyboard shortcuts ---- */
 .ps-kbd-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -325,11 +391,12 @@ const { useState, useEffect, useCallback } = React;
 
 /* ─── Tab definitions ─── */
 const TABS = [
-  { id: 'overview',    label: 'סקירה',           sub: '01' },
-  { id: 'fixes',       label: 'באגים שתוקנו',    sub: '02' },
-  { id: 'editor',      label: 'עורך המאמרים',    sub: '03' },
-  { id: 'sanity',      label: 'חיבור Sanity',    sub: '04' },
-  { id: 'roadmap',     label: 'מה חסר',           sub: '05' },
+  { id: 'overview',    label: 'סקירה',                   sub: '01' },
+  { id: 'map',         label: 'מפה — איפה כל קובץ',      sub: '02' },
+  { id: 'fixes',       label: 'באגים שתוקנו',            sub: '03' },
+  { id: 'editor',      label: 'עורך המאמרים',            sub: '04' },
+  { id: 'sanity',      label: 'חיבור Sanity',            sub: '05' },
+  { id: 'roadmap',     label: 'מה חסר',                   sub: '06' },
 ];
 
 /* ─── URL-param tab persistence ─── */
@@ -458,7 +525,237 @@ function TabOverview() {
 }
 
 /* ═══════════════════════════════
-   TAB 2 — Fixes
+   TAB 2 — Project Map
+═══════════════════════════════ */
+function TabMap() {
+  const endpoints = [
+    { file: 'save-article.js',      method: 'POST',   desc: 'שמירה/עדכון מאמר לפי slug ב-Sanity',                 env: 'SANITY_WRITE_TOKEN, EDITOR_SECRET' },
+    { file: 'delete-article.js',    method: 'DELETE', desc: 'מחיקת מאמר לפי id ב-Sanity',                         env: 'SANITY_WRITE_TOKEN, EDITOR_SECRET' },
+    { file: 'list-articles.js',     method: 'GET',    desc: 'רשימת מאמרים מ-Sanity לדפי לקוח',                    env: 'SANITY_PROJECT_ID, SANITY_DATASET' },
+    { file: 'save-news.js',         method: 'POST',   desc: 'שמירה/עדכון ידיעה ב-Sanity',                         env: 'SANITY_WRITE_TOKEN, EDITOR_SECRET' },
+    { file: 'delete-news.js',       method: 'DELETE', desc: 'מחיקת ידיעה ב-Sanity',                               env: 'SANITY_WRITE_TOKEN, EDITOR_SECRET' },
+    { file: 'list-news.js',         method: 'GET',    desc: 'רשימת ידיעות מ-Sanity לפיד הציבורי',                 env: 'SANITY_PROJECT_ID, SANITY_DATASET' },
+    { file: 'ai-format.js',         method: 'POST',   desc: 'Groq single-provider — ממיר טקסט גולמי לשדות מובנים', env: 'GROQ_API_KEY, AI_PROVIDER, AI_MODEL, EDITOR_SECRET' },
+    { file: 'ai-format-multi.js',   method: 'POST',   desc: 'Groq + OpenAI + Anthropic במקביל — מחזיר 3 גרסאות',  env: 'GROQ_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, EDITOR_SECRET' },
+    { file: 'generate-image.js',    method: 'POST',   desc: 'יצירת תמונה דרך Pollinations (חינמי, ללא key)',       env: 'IMAGE_PROVIDER, EDITOR_SECRET' },
+    { file: 'research.js',          method: 'POST',   desc: 'Brave Search → Groq synthesis לרקע על נושא',          env: 'BRAVE_SEARCH_API_KEY, GROQ_API_KEY, RESEARCH_PROVIDER, EDITOR_SECRET' },
+    { file: 'publish-telegram.js',  method: 'POST',   desc: 'שליחת ידיעה לערוץ Telegram (outbound)',               env: 'TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, EDITOR_SECRET' },
+    { file: 'telegram-webhook.js',  method: 'POST',   desc: 'קבלת פוסט מ-Telegram → יצירת news draft ב-Sanity',   env: 'TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, SANITY_WRITE_TOKEN' },
+    { file: 'search.js',            method: 'GET',    desc: 'חיפוש full-text על מאמרים וידיעות ב-Sanity',          env: 'SANITY_PROJECT_ID, SANITY_DATASET' },
+  ];
+
+  const envVars = [
+    { name: 'AI_PROVIDER',              type: 'plain',  source: 'plain_text: groq' },
+    { name: 'AI_MODEL',                 type: 'plain',  source: 'plain_text: llama-3.3-70b-versatile' },
+    { name: 'GROQ_API_KEY',             type: 'secret', source: 'KV spark-secrets / GROQ_API_KEY_1' },
+    { name: 'SANITY_PROJECT_ID',        type: 'plain',  source: 'plain_text: edmzm8yr' },
+    { name: 'SANITY_DATASET',           type: 'plain',  source: 'plain_text: production' },
+    { name: 'SANITY_API_VERSION',       type: 'plain',  source: 'plain_text: 2024-01-01' },
+    { name: 'SANITY_WRITE_TOKEN',       type: 'secret', source: 'ידני — מ-Sanity manage → API → Tokens' },
+    { name: 'EDITOR_SECRET',            type: 'secret', source: 'random 32-byte hex — ב-Pages env בלבד' },
+    { name: 'IMAGE_PROVIDER',           type: 'plain',  source: 'plain_text: pollinations' },
+    { name: 'RESEARCH_PROVIDER',        type: 'plain',  source: 'plain_text: brave' },
+    { name: 'BRAVE_SEARCH_API_KEY',     type: 'secret', source: 'KV spark-secrets / BRAVE_SEARCH_API_KEY' },
+    { name: 'TELEGRAM_BOT_TOKEN',       type: 'secret', source: 'KV spark-secrets / TELEGRAM_BOT_TOKEN' },
+    { name: 'TELEGRAM_CHAT_ID',         type: 'plain',  source: 'plain_text: 7694920368' },
+    { name: 'TELEGRAM_WEBHOOK_SECRET',  type: 'secret', source: 'random 24-byte hex — ב-Pages env בלבד' },
+    { name: 'OPENAI_API_KEY',           type: 'secret', source: 'KV spark-secrets / OPENAI_API_KEY' },
+    { name: 'OPENAI_MODEL',             type: 'plain',  source: 'plain_text: gpt-4o-mini' },
+    { name: 'ANTHROPIC_API_KEY',        type: 'secret', source: 'KV spark-secrets / ANTHROPIC_API_KEY' },
+    { name: 'ANTHROPIC_MODEL',          type: 'plain',  source: 'plain_text: claude-haiku-4-5-20251001' },
+  ];
+
+  const commands = [
+    { action: 'Sanity Studio deploy',               cwd: 'studio/',    cmd: 'pnpm sanity deploy' },
+    { action: 'Sanity Studio dev (local)',           cwd: 'studio/',    cmd: 'pnpm dev' },
+    { action: 'Install studio deps',                cwd: 'studio/',    cmd: 'pnpm install' },
+    { action: 'Sanity login (פעם אחת)',             cwd: 'studio/',    cmd: 'pnpm sanity login' },
+    { action: 'Pages dev (אתר + Functions מקומי)',  cwd: 'root',       cmd: 'npx wrangler pages dev . --port 8788 --compatibility-date 2025-01-01 --compatibility-flags=nodejs_compat' },
+    { action: 'Deploy לפרודקשן',                   cwd: 'אוטומטי',    cmd: 'git push main → .github/workflows/deploy.yml' },
+    { action: 'Telegram webhook registration',      cwd: 'root',       cmd: 'ראה docs/HANDOFF.md סעיף 3' },
+    { action: 'Sanity token refresh',               cwd: 'browser',    cmd: 'https://www.sanity.io/manage/project/edmzm8yr → Settings → API → Tokens' },
+  ];
+
+  const docs = [
+    { path: 'docs/HANDOFF.md',                                   desc: 'מקור האמת — מצב הפרויקט + הגדרה ידנית' },
+    { path: 'docs/STATUS-PROGRESS.md',                           desc: 'סטטוס מפורט phase by phase' },
+    { path: 'docs/ROADMAP.md',                                   desc: 'מה מתוכנן הלאה' },
+    { path: 'docs/SCHEMA-NEWS.md',                               desc: 'snippet של schema (כבר משולב ב-studio/)' },
+    { path: 'studio/README.md',                                  desc: 'הוראות deploy ו-token חידוש לסטודיו' },
+    { path: 'E - Newsroom Workbench/EDITOR_SETUP.md',            desc: 'הגדרה ראשונית של העורך + wrangler dev' },
+    { path: 'E - Newsroom Workbench/updates.html',               desc: 'Kanban עדכונים — אותה מידע כעמוד חי' },
+  ];
+
+  return (
+    <div>
+      <div className="ps-h2">
+        מפת <span className="serif">הפרויקט</span> — איפה כל קובץ
+      </div>
+
+      {/* ── A: Repo map ── */}
+      <div className="ps-section-head">מפת הריפו</div>
+      <div className="ps-card" style={{ marginBottom: 28, fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, lineHeight: 2, direction: 'ltr' }}>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>index.html</span><span style={{ color: 'var(--v5-dim)' }}> · root redirect → /E - Newsroom Workbench/</span></div>
+        <div><span style={{ color: 'var(--v5-dim)' }}>A/ B/ C/ D/</span><span style={{ color: 'var(--v5-dim)', fontSize: 10.5 }}> · design variations (hidden — לא מקושרים מה-UI, נשארים בריפו כ-reference)</span></div>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>E - Newsroom Workbench/</span><span style={{ color: 'var(--v5-dim)' }}> · <strong style={{ color: 'var(--v5-ink)' }}>האתר החי</strong> — כל עמוד בפרודקשן</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>├ news.html</span><span style={{ color: 'var(--v5-dim)' }}> · פיד הידיעות הציבורי</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>├ articles.html</span><span style={{ color: 'var(--v5-dim)' }}> · רשימת מאמרים</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>├ article.html</span><span style={{ color: 'var(--v5-dim)' }}> · עורך מאמרים (v5-editor.jsx)</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>├ admin/</span><span style={{ color: 'var(--v5-dim)' }}> · news.html, stats.html, channels.html</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>├ updates.html</span><span style={{ color: 'var(--v5-dim)' }}> · Kanban עדכונים</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>└ project-status.html</span><span style={{ color: 'var(--v5-dim)' }}> · הדף הזה</span></div>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>functions/api/</span><span style={{ color: 'var(--v5-dim)' }}> · 13 Cloudflare Pages Functions</span></div>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>studio/</span><span style={{ color: 'var(--v5-dim)' }}> · Sanity Studio עצמאי (pnpm, deploy בנפרד)</span></div>
+        <div style={{ paddingRight: 20 }}><span style={{ color: 'var(--v5-ink)' }}>└ schemas/</span><span style={{ color: 'var(--v5-dim)' }}> · article, news, aiStudioSettings + 7 object types</span></div>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>docs/</span><span style={{ color: 'var(--v5-dim)' }}> · HANDOFF.md, ROADMAP.md, STATUS-PROGRESS.md, SCHEMA-NEWS.md</span></div>
+        <div><span style={{ color: 'var(--v5-cobalt)', fontWeight: 700 }}>scripts/</span><span style={{ color: 'var(--v5-dim)' }}> · import-telegram.js (Telegram Desktop JSON → Sanity drafts)</span></div>
+        <div><span style={{ color: 'var(--v5-dim)' }}>_handoff/</span><span style={{ color: 'var(--v5-dim)', fontSize: 10.5 }}> · chat exports היסטוריים (frozen)</span></div>
+        <div><span style={{ color: 'var(--v5-dim)' }}>.github/workflows/deploy.yml</span><span style={{ color: 'var(--v5-dim)', fontSize: 10.5 }}> · GitHub Actions → Pages deploy</span></div>
+      </div>
+
+      {/* ── B: Where to find X ── */}
+      <div className="ps-section-head">איפה כל דבר</div>
+      <div className="ps-card" style={{ padding: '4px 0 4px', marginBottom: 28 }}>
+        <table className="ps-lookup">
+          <thead>
+            <tr><th>מה אני מחפש</th><th>איפה זה</th></tr>
+          </thead>
+          <tbody>
+            {[
+              ['עורך מאמרים',         'E - Newsroom Workbench/article.html · v5-editor.jsx · v5-editor.css'],
+              ['רשימת מאמרים',        'E - Newsroom Workbench/articles.html'],
+              ['פיד ידיעות ציבורי',   'E - Newsroom Workbench/news.html · v5-news.css'],
+              ['Studio (Sanity UI)',   'studio/sanity.config.ts · studio/schemas/*'],
+              ['כל endpoint שמירה/קריאה/AI', 'functions/api/*.js (ראה סעיף C למטה)'],
+              ['Settings ⚙ (EDITOR_SECRET)', 'localStorage key: v5_editor_secret'],
+              ['HANDOFF / סטטוס',     'docs/HANDOFF.md (קנוני)'],
+              ['admin ← ניהול ידיעות', 'E - Newsroom Workbench/admin/news.html'],
+              ['admin ← Stats',        'E - Newsroom Workbench/admin/stats.html'],
+              ['Telegram import סקריפט', 'scripts/import-telegram.js'],
+            ].map(([q, a], i) => (
+              <tr key={i}>
+                <td style={{ fontWeight: 600 }}>{q}</td>
+                <td><span className="mono" style={{ fontSize: 11 }}>{a}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── C: 13 endpoints ── */}
+      <div className="ps-section-head">13 pages functions</div>
+      <div className="ps-card" style={{ padding: '4px 0 4px', marginBottom: 28 }}>
+        <table className="ps-fn-table">
+          <thead>
+            <tr><th>קובץ</th><th>Method</th><th>תפקיד</th><th>env vars</th></tr>
+          </thead>
+          <tbody>
+            {endpoints.map(ep => (
+              <tr key={ep.file}>
+                <td><span className="mono">{ep.file}</span></td>
+                <td><span className="mono" style={{ color: 'var(--v5-cobalt)', fontSize: 10 }}>{ep.method}</span></td>
+                <td style={{ fontSize: 11.5 }}>{ep.desc}</td>
+                <td style={{ fontSize: 10, color: 'var(--v5-dim)', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.6 }}>{ep.env}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── D: Where to run commands ── */}
+      <div className="ps-section-head">מאיפה להריץ פקודות</div>
+      <div className="ps-warn" style={{ marginBottom: 20 }}>
+        <div className="ps-warn-head">⚠ שגיאה נפוצה</div>
+        <span className="mono" style={{ fontSize: 11 }}>pnpm sanity deploy</span> חייב לרוץ מתוך <span className="mono" style={{ fontSize: 11 }}>studio/</span> — הרצה מ-root הריפו מחזירה <span className="mono" style={{ fontSize: 11, color: 'var(--v5-rose)' }}>ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND</span> כי ה-<span className="mono" style={{ fontSize: 11 }}>package.json</span> של הסטודיו יושב ב-<span className="mono" style={{ fontSize: 11 }}>studio/</span>, לא ב-root.
+      </div>
+      <div className="ps-card" style={{ padding: '4px 0 4px', marginBottom: 28 }}>
+        <table className="ps-cmd-table">
+          <thead>
+            <tr><th>פעולה</th><th>CWD</th><th>פקודה</th></tr>
+          </thead>
+          <tbody>
+            {commands.map((c, i) => (
+              <tr key={i}>
+                <td style={{ fontWeight: 600, fontSize: 12 }}>{c.action}</td>
+                <td><span className="mono" style={{ color: 'var(--v5-cobalt)', fontSize: 10.5 }}>{c.cwd}</span></td>
+                <td><span className="mono" style={{ fontSize: 10 }}>{c.cmd}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── E: Production map ── */}
+      <div className="ps-section-head">production — URLs + IDs + bindings</div>
+      <div className="ps-stats" style={{ marginBottom: 20 }}>
+        {[
+          { n: 'new.nvision.me',     l: 'Site URL (primary)',            color: 'var(--v5-cobalt)' },
+          { n: 'edmzm8yr',           l: 'Sanity project id',             color: 'var(--v5-sage)' },
+          { n: 'vibe-code-news-ai',  l: 'CF Pages project name',         color: 'var(--v5-mustard)' },
+          { n: '5bf5…01c9',          l: 'CF Account ID (last 4)',         color: 'var(--v5-dim)' },
+        ].map(s => (
+          <div className="ps-stat" key={s.l} style={{ borderColor: s.color, boxShadow: `4px 4px 0 ${s.color}` }}>
+            <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: '-0.02em', fontFamily: 'JetBrains Mono, monospace', color: s.color, marginBottom: 4, wordBreak: 'break-all' }}>{s.n}</div>
+            <div className="ps-stat-l">{s.l}</div>
+          </div>
+        ))}
+      </div>
+      <div className="ps-card ps-card-sm" style={{ marginBottom: 24, fontSize: 12, lineHeight: 1.7 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 24px' }}>
+          <div><span style={{ color: 'var(--v5-dim)' }}>CF Pages project:</span> <span className="mono" style={{ fontSize: 11 }}>vibe-code-news-ai</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>CF Pages id:</span> <span className="mono" style={{ fontSize: 10 }}>86dae7ee-e7f3-4abc-ad96-051d500ddbf7</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>CF Account:</span> <span className="mono" style={{ fontSize: 11 }}>5bf57396a7de9b1331d2ed6093af01c9</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>Pages alt URL:</span> <span className="mono" style={{ fontSize: 11 }}>vibe-code-news-ai.pages.dev</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>Sanity dataset:</span> <span className="mono" style={{ fontSize: 11 }}>production</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>Sanity API version:</span> <span className="mono" style={{ fontSize: 11 }}>2024-01-01</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>Studio URL:</span> <span className="mono" style={{ fontSize: 11 }}>&lt;hostname&gt;.sanity.studio</span></div>
+          <div><span style={{ color: 'var(--v5-dim)' }}>KV namespace (spark-secrets):</span> <span className="mono" style={{ fontSize: 10 }}>215100443225476ab32bea1e6411ac69</span></div>
+        </div>
+      </div>
+
+      <div className="ps-section-head">env vars — production (ללא ערכים)</div>
+      <div className="ps-card" style={{ padding: '4px 0 4px', marginBottom: 28 }}>
+        <table className="ps-env-table">
+          <thead>
+            <tr><th>משתנה</th><th>סוג</th><th>מקור</th></tr>
+          </thead>
+          <tbody>
+            {envVars.map(v => (
+              <tr key={v.name}>
+                <td><span className="mono" style={{ fontSize: 11 }}>{v.name}</span></td>
+                <td>
+                  {v.type === 'secret'
+                    ? <span className="ps-env-secret">secret</span>
+                    : <span className="ps-env-plain">plain</span>
+                  }
+                </td>
+                <td style={{ fontSize: 11.5, color: 'var(--v5-dim)' }}>{v.source}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── F: Doc index ── */}
+      <div className="ps-section-head">מדריך מסמכים</div>
+      <div className="ps-rm-group">
+        {docs.map((d, i) => (
+          <div className="ps-rm-item" key={i}>
+            <div className="ps-rm-item-icon" style={{ color: 'var(--v5-cobalt)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>→</div>
+            <div className="ps-rm-item-body">
+              <div className="ps-rm-item-title" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700 }}>{d.path}</div>
+              <div className="ps-rm-item-desc">{d.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+}
+
+/* ═══════════════════════════════
+   TAB 3 — Fixes
 ═══════════════════════════════ */
 function TabFixes() {
   const bugs = [
@@ -848,6 +1145,7 @@ function V5ProjectStatus() {
 
   const content = {
     overview: <TabOverview />,
+    map:      <TabMap />,
     fixes:    <TabFixes />,
     editor:   <TabEditor />,
     sanity:   <TabSanity />,
@@ -869,6 +1167,5 @@ function V5ProjectStatus() {
 const _psRoot = ReactDOM.createRoot(document.getElementById('root'));
 _psRoot.render(React.createElement(V5ProjectStatus));
 </script>
-<script defer src="/tabs.js"></script>
 </body>
 </html>

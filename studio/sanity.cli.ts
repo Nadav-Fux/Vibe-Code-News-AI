@@ -5,4 +5,5 @@ export default defineCliConfig({
     projectId: 'edmzm8yr',
     dataset: 'production',
   },
+  studioHost: 'nvision',
 })
